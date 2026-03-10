@@ -1,0 +1,4 @@
+com/insurance/claim/controller/ClaimControllerIT.class
+com/insurance/claim/service/ClaimServiceTest.class
+com/insurance/claim/service/PolicyServiceTest.class
+com/insurance/claim/validator/PolicyNumberValidatorTest.class
