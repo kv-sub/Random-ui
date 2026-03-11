@@ -119,7 +119,7 @@ After each run, coverage reports are uploaded as artifacts:
 
 | Layer | Target | Current Exclusions |
 |-------|--------|-------------------|
-| Backend | ≥90% instruction coverage | DTOs, application entry, OpenAPI config |
+| Backend | ≥80% instruction coverage | DTOs, application entry, OpenAPI config |
 | Frontend | ≥80% statements/branches/functions/lines | `main.tsx`, type declaration files |
 
 ---

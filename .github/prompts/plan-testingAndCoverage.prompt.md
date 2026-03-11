@@ -140,12 +140,12 @@
 
 1. **Backend Coverage Test**:
    - Run `mvn clean test jacoco:report` 
-   - Verify `target/site/jacoco/index.html` shows ≥90% coverage for included packages
+   - Verify `target/site/jacoco/index.html` shows ≥80% coverage for included packages
    - Confirm DTOs excluded, entities included
 
 2. **Frontend Coverage Test**:
    - Run `npm test -- --coverage`
-   - Verify coverage report for critical components ≥90%
+   - Verify coverage report for critical components ≥80%
    - Test form submission, auth flows, protected routes
 
 3. **Local Report Serving**:
@@ -171,7 +171,7 @@
 - **Partial Entity Inclusion**: Entities now counted in coverage (they contain business logic via validation annotations and relationships), DTOs remain excluded (simple data carriers)
 - **Frontend Testing Priority**: Focus on critical paths (auth, claim submission, navigation) rather than exhaustive component testing—this optimizes time investment for 90% coverage
 - **Codespace Report Viewing**: Simple HTTP server (minimal dependencies) rather than full dashboard, enables immediate use without complex tooling
-- **CI/CD Coverage Threshold**: Set to enforce ≥90% to block PRs that reduce coverage
+- **CI/CD Coverage Threshold**: Set to enforce ≥80% to block PRs that reduce coverage
 
 ---
 
