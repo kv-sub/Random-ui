@@ -1,8 +1,8 @@
 # Service Decomposition
 ## Insurance Claim Submission System
 
-**Version:** 1.1  
-**Date:** March 2026
+**Version:** 1.2  
+**Date:** May 2026
 
 ---
 
@@ -12,12 +12,13 @@
 |---------|------------|----------------------------------------------------------------------------------------|
 | 1.0     | 2026-01-05 | Initial service map — PolicyService and Auth/Navigation boundary defined (Sprint 1)    |
 | 1.1     | 2026-03-02 | Added `ClaimHistoryService` decomposition and audit trail service boundary (Sprint 5)   |
+| 1.2     | 2026-05-11 | Added Synthetic Data Agent service boundary and Docker profile isolation (Sprint 10)     |
 
 ---
 
 ## Overview
 
-The system is built as a **modular monolith** — a single deployable Spring Boot application internally divided into clearly separated service modules, each owning a distinct business domain. The frontend is a separate SPA communicating exclusively over REST.
+The system is built as a **modular monolith** — a single deployable Spring Boot application internally divided into clearly separated service modules, each owning a distinct business domain. The frontend is a separate SPA communicating exclusively over REST. The **Synthetic Data Agent** is a standalone Python/Streamlit tool that runs in isolation in the `test` Docker Compose profile, touching only a dedicated `synthetic` schema.
 
 ---
 
@@ -43,6 +44,11 @@ graph LR
         T2[("policy_coverages")]
         T3[("claims")]
         T4[("claim_history")]
+        T5[("synthetic.*\n(agent target)")]
+    end
+
+    subgraph Agent["Synthetic Data Agent (test profile only)"]
+        SA["Streamlit Python App\nPort 8501\nDiscover → LLM Spec → Faker → Load"]
     end
 
     UI_C -->|REST| POLICY
@@ -59,6 +65,10 @@ graph LR
     CLAIM --> T4
     HISTORY --> T3
     HISTORY --> T4
+
+    SA -->|reads public schema| T1
+    SA -->|reads public schema| T3
+    SA -->|writes synthetic schema| T5
 ```
 
 ---
@@ -71,6 +81,7 @@ graph LR
 | **Claim Service** | Claim lifecycle (submit → review → terminal), 7-step validation chain, duplicate detection | Policy data management, history presentation |
 | **Claim History Service** | Audit trail retrieval | Writing history records (done by Claim Service) |
 | **Validation Layer** | Input format/type validation (Bean Validation), global error mapping | Business logic validation (lives in services) |
+| **Synthetic Data Agent** | Schema introspection, LLM spec generation, Faker row generation, synthetic schema load | Live claim processing, user authentication, production data |
 
 ---
 
@@ -195,7 +206,49 @@ graph TD
 
 ---
 
-## 8. Scalability Pattern
+## 9. Synthetic Data Agent — Service Boundary
+
+**Runtime:** Python 3.12 + Streamlit  
+**Docker profile:** `test` only (never deployed to prod)  
+**Port:** 8501  
+**Endpoint accessed by:** developers / QA engineers (browser)
+
+### Responsibilities
+- Introspect the source schema via `information_schema.columns`
+- Call an OpenAI-compatible LLM endpoint to receive a per-column generation plan (`GenSpec`)
+- Fall back to a rule-based spec when the LLM is unreachable
+- Produce rows using Faker providers, categorical choices, numeric ranges, temporal generators, UUIDs, booleans, and JSON
+- Bulk-load generated rows into the `synthetic` schema of the configured PostgreSQL instance
+
+### Boundary Rules
+- Reads only from `information_schema` and the specified source schema — **never writes to `public`**
+- All generated data lands in the **`synthetic`** schema (separate from live data)
+- DB credentials are injected at runtime via Docker Compose environment variables; they are never hardcoded
+- The `synthetic-agent` Docker service `depends_on: db (service_healthy)` — it cannot start before the database is ready
+
+### Isolation Guarantee
+
+```mermaid
+graph TD
+    PROD["prod profile\ndocker compose up"] --> APP["app (Spring Boot)"]
+    PROD --> DB["db (PostgreSQL)"]
+
+    TEST["test profile\ndocker compose --profile test up"] --> APP2["app (Spring Boot)"]
+    TEST --> DB2["db (PostgreSQL)"]
+    TEST --> SA["synthetic-agent (Streamlit)"]
+
+    SA -->|writes only| SYN[("synthetic schema")]
+    APP2 -->|reads/writes| PUB[("public schema")]
+
+    style SA fill:#fce7f3,stroke:#ec4899
+    style SYN fill:#fdf2f8,stroke:#ec4899
+    style PROD fill:#dcfce7,stroke:#16a34a
+    style TEST fill:#fce7f3,stroke:#ec4899
+```
+
+---
+
+## 10. Scalability Pattern
 
 The API is **stateless by design** — no HTTP session, no in-memory cache. All state lives in PostgreSQL. This allows horizontal scaling behind a load balancer:
 

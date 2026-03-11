@@ -1,8 +1,8 @@
 # Architecture Diagrams
 ## Insurance Claim Submission System
 
-**Version:** 1.1  
-**Date:** March 2026
+**Version:** 1.2  
+**Date:** May 2026
 
 ---
 
@@ -12,6 +12,7 @@
 |---------|------------|----------------------------------------------------------------------------------|
 | 1.0     | 2026-01-05 | Initial system context and container diagrams (Sprint 1)                         |
 | 1.1     | 2026-02-09 | Updated component diagram — added claim submission and validation components (Sprint 3) |
+| 1.2     | 2026-05-11 | Added synthetic-agent container to container and deployment diagrams (Sprint 10)         |
 
 ---
 
@@ -61,18 +62,24 @@ graph TB
             SWAGGER["Swagger UI\n/swagger-ui.html\n(SpringDoc OpenAPI 3.0)"]
         end
         subgraph DBContainer["db container"]
-            PG[("PostgreSQL 16\nPort: 5432\n────────────\npolicies\npolicy_coverages\nclaims\nclaim_history")]
+            PG[("PostgreSQL 16\nPort: 5432\n——————————\npolicies\npolicy_coverages\nclaims\nclaim_history\nsynthetic.* (agent)")]
+        end
+        subgraph AgentContainer["synthetic-agent container (test profile only)"]
+            SA["Streamlit Python App\nPort: 8501\n————————————————————————\nStep 1: Schema Discovery\nStep 2: LLM Spec Generation\nStep 3: Faker Row Generation\nStep 4: PostgreSQL Bulk Load"]
         end
     end
 
     Browser -->|"HTTP REST\nJSON /api/v1/*"| API
     Browser -->|"View API docs"| SWAGGER
+    Browser -->|"Synthetic data UI (test only)"| SA
     API -->|"JDBC / Hibernate ORM"| PG
+    SA -->|"psycopg2 JDBC :5432"| PG
 
     style Browser fill:#dbeafe,stroke:#3b82f6
     style DockerHost fill:#f0fdf4,stroke:#22c55e
     style AppContainer fill:#dcfce7,stroke:#16a34a
     style DBContainer fill:#fef9c3,stroke:#ca8a04
+    style AgentContainer fill:#fce7f3,stroke:#ec4899
 ```
 
 ---
@@ -335,19 +342,70 @@ flowchart LR
 graph TB
     subgraph Internet["Internet / Intranet"]
         USER["End Users\n(Browser)"]
+        DEV["Developer / QA\n(Browser)"]
     end
 
-    subgraph DockerCompose["Docker Compose Stack"]
-        subgraph Net["docker network: insurance-network"]
-            APP["app service\nSpring Boot JAR\nPort 8080:8080\nDepends on: db"]
-            DB["db service\nPostgreSQL 16\nPort 5432:5432\nVolume: pgdata"]
+    subgraph ProdStack["Docker Compose — prod profile"]
+        subgraph ProdNet["docker network"]
+            APP_P["app service\nSpring Boot JAR\nPort 8080:8080\nSPRING_PROFILES_ACTIVE=prod"]
+            DB_P["db service\nPostgreSQL 16\nPort 5432:5432\nVolume: pgdata"]
         end
     end
 
-    USER -->|"HTTP :8080"| APP
-    APP -->|"JDBC :5432"| DB
+    subgraph TestStack["Docker Compose — test profile (--profile test)"]
+        subgraph TestNet["docker network"]
+            APP_T["app service\nSpring Boot JAR\nPort 8080:8080"]
+            DB_T["db service\nPostgreSQL 16\nPort 5432:5432"]
+            SA["synthetic-agent service\nStreamlit Python\nPort 8501:8501"]
+        end
+    end
+
+    USER -->|"HTTP :8080"| APP_P
+    APP_P -->|"JDBC :5432"| DB_P
+
+    DEV -->|"HTTP :8080"| APP_T
+    DEV -->|"HTTP :8501"| SA
+    APP_T -->|"JDBC :5432"| DB_T
+    SA -->|"psycopg2 :5432"| DB_T
 
     style Internet fill:#f1f5f9,stroke:#94a3b8
-    style DockerCompose fill:#f0fdf4,stroke:#22c55e
-    style Net fill:#dcfce7,stroke:#16a34a
+    style ProdStack fill:#f0fdf4,stroke:#22c55e
+    style ProdNet fill:#dcfce7,stroke:#16a34a
+    style TestStack fill:#fce7f3,stroke:#ec4899
+    style TestNet fill:#fdf2f8,stroke:#ec4899
+```
+
+---
+
+## 10. Synthetic Agent — Data Flow
+
+```mermaid
+graph LR
+    DEV["Developer\nBrowser :8501"]
+
+    subgraph Agent["synthetic-agent (Streamlit)"]
+        S1["Step 1\nDiscover Schema\n(information_schema)"]
+        S2["Step 2\nLLM Spec\n(gpt-4.1 / fallback)"]
+        S3["Step 3\nGenerate Rows\n(Faker + strategies)"]
+        S4["Step 4\nLoad to DB\n(execute_values)"]
+    end
+
+    subgraph PG["PostgreSQL (db service)"]
+        PUB[("public schema\n(source tables)")]
+        SYN[("synthetic schema\n(generated tables)")]
+    end
+
+    LLM["LLM Endpoint\n(AICafe / gpt-4.1)"]
+
+    DEV -->|"click Discover"| S1
+    S1 -->|"reads schema"| PUB
+    S1 -->|"schema JSON"| S2
+    S2 -->|"POST chat/completions"| LLM
+    LLM -->|"GenSpec JSON"| S2
+    S2 -->|"validated spec"| S3
+    S3 -->|"rows dict"| S4
+    S4 -->|"CREATE + INSERT"| SYN
+
+    style Agent fill:#fce7f3,stroke:#ec4899
+    style PG fill:#fef9c3,stroke:#ca8a04
 ```

@@ -1,10 +1,10 @@
 # High Level Design (HLD)
 ## Insurance Claim Submission System
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Final  
 **Authors:** Engineering Team  
-**Last Updated:** March 2026
+**Last Updated:** May 2026
 
 ---
 
@@ -15,6 +15,7 @@
 | 1.0     | 2026-01-05 | Initial HLD — system objectives, architecture overview, actor definitions       |
 | 1.1     | 2026-02-02 | Added claim submission business flows and server-side validation rules (Sprint 3) |
 | 1.2     | 2026-03-16 | Added admin adjudication flow and audit trail section (Sprint 6–7)             |
+| 1.3     | 2026-05-11 | Added Synthetic Data Generation Agent service and env-based Docker Compose routing (Sprint 10) |
 
 ---
 
@@ -102,6 +103,18 @@ A relational database (PostgreSQL 16) holding all persistent state:
 - `policy_coverages` — Per-claim-type coverage limits linked to a policy
 - `claims` — Submitted insurance claims
 - `claim_history` — Immutable audit log of all claim status transitions
+- `synthetic.*` — Mirror tables in the `synthetic` schema populated by the data agent (test/dev only)
+
+### 3.4 Synthetic Data Generation Agent (`synthetic-agent`)
+
+A Python/Streamlit single-page application that generates realistic test data directly from a live PostgreSQL schema. It is deployed as a Docker container and is **only active in the `test` profile** of Docker Compose.
+
+Responsibilities:
+- **Schema Discovery** — Introspect source schema via `information_schema` to build a full column-type map
+- **LLM Spec Generation** — Send the schema to a configurable LLM endpoint (default: gpt-4.1 via AICafe) to receive a JSON generation plan with per-column strategies
+- **Faker-based Row Generation** — Produce synthetic rows using [Faker](https://faker.readthedocs.io/) for text, numeric ranges, dates, UUIDs, booleans, and JSON columns
+- **PostgreSQL Bulk Load** — Create a target schema (`synthetic`) and bulk-insert generated rows using `psycopg2.extras.execute_values`
+- **Demo Mode** — Full workflow preview without any external DB or LLM connection; safe for UI demonstrations
 
 ---
 
@@ -147,18 +160,18 @@ A relational database (PostgreSQL 16) holding all persistent state:
 ### Deployment (Docker Compose)
 
 ```
-┌─────────────────────────────────────────────┐
-│              Docker Host                    │
-│                                             │
-│  ┌─────────────────┐  ┌──────────────────┐  │
-│  │  app container  │  │   db container   │  │
-│  │  (Spring Boot)  │◄─┤  (PostgreSQL 16) │  │
-│  │  port 8080      │  │  port 5432       │  │
-│  └─────────────────┘  └──────────────────┘  │
-│                                             │
-│  Frontend served via Vite dev server        │
-│  (or static build served from app)          │
-└─────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│              Docker Host  (test profile)               │
+│                                                         │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌──────────────┐  │
+│  │  app             │  │  db               │  │ synthetic    │  │
+│  │  (Spring Boot)   ◄─│  (PostgreSQL 16)  │◄─│ agent        │  │
+│  │  port 8080       │  │  port 5432       │  │ (Streamlit)  │  │
+│  │                 │  │                 │  │ port 8501    │  │
+│  └─────────────────┘  └──────────────────┘  └──────────────┘  │
+│                                                         │
+│  synthetic-agent is EXCLUDED in the prod profile         │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -328,6 +341,18 @@ Claim details card              Timeline of status changes (newest first)
 | Engine | PostgreSQL | 16 |
 | Schema management | Spring Boot DDL auto / `schema.sql` | — |
 
+### Synthetic Data Agent
+
+| Component | Technology | Version |
+|---|---|---|
+| Language | Python | 3.12 |
+| UI framework | Streamlit | ≥ 1.35 |
+| Data generation | Faker | ≥ 24.0 |
+| LLM integration | OpenAI-compatible REST API (AICafe) | gpt-4.1 |
+| DB connector | psycopg2-binary | ≥ 2.9 |
+| Data handling | pandas, pydantic | 2.x |
+| Containerisation | Docker (multi-stage, non-root) | — |
+
 ---
 
 ## 9. Non-Functional Requirements
@@ -384,13 +409,20 @@ docker-compose up db
 ### Docker (Production-like)
 
 ```bash
+# Production (app + db only)
 cd insurance-claim-system
-docker-compose up --build
+docker compose --env-file .env.prod up --build
+
+# Test / Dev (app + db + synthetic data agent)
+docker compose --env-file .env.test --profile test up --build
 ```
 
 The `docker-compose.yml` defines:
-- `db` service: PostgreSQL 16, port 5432
-- `app` service: Spring Boot JAR, port 8080, depends on `db`
+- `db` service: PostgreSQL 16, port 5432 — always started
+- `app` service: Spring Boot JAR, port 8080, depends on `db` — always started
+- `synthetic-agent` service: Streamlit Python app, port 8501 — **`test` profile only**
+
+Environment is controlled via `.env.prod` or `.env.test` files; `APP_ENV` drives the Spring profile.
 
 ### Ports
 
@@ -400,6 +432,7 @@ The `docker-compose.yml` defines:
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | PostgreSQL | 5432 |
 | Vite Dev Server | 5173 (proxies `/api` to 8080) |
+| Synthetic Data Agent (test only) | 8501 |
 
 ---
 
@@ -417,3 +450,6 @@ The `docker-compose.yml` defines:
 | 8 | Incident dates must not be in the future; historical dates are accepted without a lookback limit |
 | 9 | The system is a single-region deployment — no multi-region HA requirement in current scope |
 | 10 | Policy number format is fixed: `POL-` followed by exactly 5 uppercase alphanumeric characters (e.g., `POL-AB123`) |
+| 11 | The Synthetic Data Agent is a developer/test-time tool only; it must never be deployed or reachable in production |
+| 12 | The `synthetic` schema created by the agent is isolated from the `public` schema used by the live application |
+| 13 | The agent's LLM call falls back to a local generation plan if the LLM endpoint is unavailable or SSL validation fails |

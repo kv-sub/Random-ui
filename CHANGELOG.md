@@ -6,6 +6,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Sprint 10] — 2026-05-11 to 2026-05-22 · Synthetic Data Generation Agent
+
+### Added
+- **Synthetic Data Agent** (`main.py` + `synthetic-agent/`) — Streamlit Python application that introspects a live PostgreSQL schema, calls an LLM to produce a Faker-based generation plan, generates realistic synthetic rows, and bulk-inserts them into a `synthetic` schema
+- `synthetic-agent/Dockerfile` — multi-stage Python 3.12-slim image, non-root user, Streamlit entry point
+- `synthetic-agent/requirements.txt` — pinned Python dependencies (Streamlit, Faker, psycopg2-binary, pydantic, pandas, requests)
+- `insurance-claim-system/.env.prod` and `.env.test` — environment files for Docker Compose profile selection
+- `synthetic-agent` service in `docker-compose.yml` with `profiles: [test]` — only starts when `--profile test` is passed
+
+### Changed
+- `insurance-claim-system/docker-compose.yml` — restructured to support env-based profile routing (`APP_ENV=prod` / `APP_ENV=test`); all connection params now driven by env vars with sensible defaults
+- `main.py` sidebar — DB connection fields now default to `PG_HOST`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD`, `SRC_SCHEMA`, and `TGT_SCHEMA` environment variables so Docker Compose can pre-populate them
+- API key handling — no longer unconditionally overwrites `AICAFE_API_KEY`; only sets the fallback if the variable is absent
+
+### Docs Updated
+- `HLD.md` → **v1.3** (section 3.4 Synthetic Data Agent, updated arch diagram, tech stack, deployment model)
+- `LLD.md` → **v1.4** (section 15 Synthetic Data Agent component design, generation strategies, LLM integration, Docker wiring, security notes)
+- `01-architecture-diagram.md` → **v1.2** (container diagram + deployment diagram updated; new section 10 Synthetic Agent data flow)
+- `02-service-decomposition.md` → **v1.2** (service map updated; section 9 Synthetic Agent service boundary; section 10 scalability renumbered)
+- `09-sprint-plan.md` → **v1.3** (Epic 7 added; Sprint 10 tasks + DoD; capacity table and risk register updated)
+
+---
+
 ## [Sprint 9] — 2026-04-27 to 2026-05-02 · Production Hardening
 
 ### Changed
