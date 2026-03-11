@@ -1,4 +1,4 @@
-# Plan: 90% Test Coverage with Jacoco Reports in Codespace
+# Plan: 80% Test Coverage with Jacoco Reports in Codespace
 
 **TL;DR:** Add missing backend tests (services, controllers, exceptions), set up frontend testing with critical path coverage, configure partial entity inclusion, create a simple HTTP server to view Jacoco reports in Codespace, and add GitHub Actions for automated coverage enforcement.
 
@@ -98,7 +98,7 @@
       4. Run `mvn clean test jacoco:report` (backend)
       5. Run `npm test -- --coverage` (frontend)
       6. Parse and aggregate coverage
-      7. Enforce minimum 90% threshold
+      7. Enforce minimum 80% threshold
       8. Comment PR with coverage report summary
       9. Fail CI if threshold not met
 
@@ -156,20 +156,20 @@
 4. **Docker Build Test**:
    - Build image: `docker build .` (from insurance-claim-system/)
    - Verify tests run during build (no `-DskipTests`)
-   - Confirm build fails if coverage < 90%
+   - Confirm build fails if coverage < 80%
 
 5. **CI/CD Test**:
    - Create test PR
    - Verify GitHub Actions runs all tests
    - Confirm PR comment shows coverage summary
-   - Verify CI blocks merge if coverage < 90%
+   - Verify CI blocks merge if coverage < 80%
 
 ---
 
 ## Decisions
 
 - **Partial Entity Inclusion**: Entities now counted in coverage (they contain business logic via validation annotations and relationships), DTOs remain excluded (simple data carriers)
-- **Frontend Testing Priority**: Focus on critical paths (auth, claim submission, navigation) rather than exhaustive component testing—this optimizes time investment for 90% coverage
+- **Frontend Testing Priority**: Focus on critical paths (auth, claim submission, navigation) rather than exhaustive component testing—this optimizes time investment for 80% coverage
 - **Codespace Report Viewing**: Simple HTTP server (minimal dependencies) rather than full dashboard, enables immediate use without complex tooling
 - **CI/CD Coverage Threshold**: Set to enforce ≥80% to block PRs that reduce coverage
 
@@ -205,7 +205,7 @@
 - **Current Tests**: NONE - requires framework setup
 
 ### Current Gaps
-- Missing service/controller/exception handler tests for 90% coverage
+- Missing service/controller/exception handler tests for 80% coverage
 - No frontend testing framework or tests
 - Tests skipped in Docker build
 - Entities/DTOs excluded from coverage metrics

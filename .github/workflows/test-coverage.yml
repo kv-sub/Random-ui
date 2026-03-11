@@ -51,11 +51,11 @@ jobs:
           echo "Backend instruction coverage: ${COVERAGE}%"
           python3 -c "
           cov = float('${COVERAGE}')
-          if cov < 90.0:
-              print(f'ERROR: Coverage {cov:.1f}% is below the required 90% threshold.')
+          if cov < 80.0:
+              print(f'ERROR: Coverage {cov:.1f}% is below the required 80% threshold.')
               exit(1)
           else:
-              print(f'OK: Coverage {cov:.1f}% meets the >=90% requirement.')
+              print(f'OK: Coverage {cov:.1f}% meets the >=80% requirement.')
           "
 
       - name: Upload JaCoCo HTML report
@@ -131,7 +131,7 @@ jobs:
                 if (total > 0) {
                   const pct = (covered / total * 100).toFixed(1);
                   backendCoverage = `${pct}%`;
-                  backendStatus = parseFloat(pct) >= 90 ? '✅' : '❌';
+                  backendStatus = parseFloat(pct) >= 80 ? '✅' : '❌';
                 }
               }
             } catch (e) {
