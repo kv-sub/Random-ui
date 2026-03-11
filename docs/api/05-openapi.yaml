@@ -1,0 +1,584 @@
+openapi: 3.0.3
+info:
+  title: Insurance Claim Submission System API
+  description: |
+    REST API for the Insurance Claim Submission System.
+
+    Allows customers to submit and track insurance claims, and allows admin reviewers to
+    look up policies, list claims, and approve or reject them.
+
+    ## Authentication
+    Current implementation uses role-based UI routing (CUSTOMER / ADMIN).
+    Production deployment should add JWT Bearer token header.
+
+    ## Base URL
+    `http://localhost:8080/api/v1`
+
+    ## Error Format
+    All errors return a consistent `ErrorResponse` object:
+    ```json
+    {
+      "status": 400,
+      "error": "Coverage Exceeded",
+      "message": "Claim amount 5000.00 exceeds coverage limit 2000.00 for claim type MEDICAL",
+      "timestamp": "2026-03-10T10:15:30",
+      "details": []
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: Insurance Engineering Team
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+tags:
+  - name: Claims
+    description: Submit, retrieve, and review claims
+  - name: Claim History
+    description: Audit trail of claim status transitions
+  - name: Policies
+    description: Policy lookup and coverage information
+
+paths:
+
+  # ─────────────────────────────────────────────
+  # CLAIMS
+  # ─────────────────────────────────────────────
+
+  /claims:
+    post:
+      tags: [Claims]
+      summary: Submit a new claim
+      description: |
+        Submits a new insurance claim against an active policy.
+
+        **Business validation performed (in order):**
+        1. Policy must exist
+        2. Policy must have status `ACTIVE`
+        3. Today must be within `[effectiveDate, expiryDate]`
+        4. An active `PolicyCoverage` must exist for the given `claimType`
+        5. `claimAmount` must not exceed the coverage `limitAmount`
+        6. No identical claim (same policy + type + incident date) submitted in the last 24 hours
+      operationId: submitClaim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimSubmissionRequest'
+            examples:
+              medicalClaim:
+                summary: Medical claim example
+                value:
+                  policyNumber: "POL-AB123"
+                  claimType: "MEDICAL"
+                  claimAmount: 1500.00
+                  incidentDate: "2026-03-08"
+                  description: "Required dental surgery following an emergency diagnosis of acute infection."
+      responses:
+        '201':
+          description: Claim submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+              example:
+                claimId: 42
+                policyId: 7
+                policyNumber: "POL-AB123"
+                claimType: "MEDICAL"
+                claimAmount: 1500.00
+                incidentDate: "2026-03-08"
+                description: "Required dental surgery following an emergency diagnosis of acute infection."
+                status: "SUBMITTED"
+                createdAt: "2026-03-10T09:00:00"
+                updatedAt: "2026-03-10T09:00:00"
+        '400':
+          description: Validation failure, policy inactive, coverage exceeded, or invalid claim type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validationFailed:
+                  summary: Bean validation failure
+                  value:
+                    status: 400
+                    error: "Validation Failed"
+                    message: "Request validation failed"
+                    timestamp: "2026-03-10T09:00:00"
+                    details:
+                      - "policyNumber: Policy number must match format POL-XXXXX"
+                policyInactive:
+                  summary: Policy not active
+                  value:
+                    status: 400
+                    error: "Policy Inactive"
+                    message: "Policy POL-AB123 is not active. Current status: EXPIRED"
+                    timestamp: "2026-03-10T09:00:00"
+                    details: []
+                coverageExceeded:
+                  summary: Amount exceeds coverage limit
+                  value:
+                    status: 400
+                    error: "Coverage Exceeded"
+                    message: "Claim amount 5000.00 exceeds coverage limit 2000.00 for claim type MEDICAL"
+                    timestamp: "2026-03-10T09:00:00"
+                    details: []
+                invalidClaimType:
+                  summary: Claim type not covered
+                  value:
+                    status: 400
+                    error: "Invalid Claim Type"
+                    message: "Claim type VISION is not covered under policy POL-AB123 or the coverage is inactive"
+                    timestamp: "2026-03-10T09:00:00"
+                    details: []
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                error: "Policy Not Found"
+                message: "Policy not found: POL-AB123"
+                timestamp: "2026-03-10T09:00:00"
+                details: []
+        '409':
+          description: Duplicate claim detected within 24 hours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 409
+                error: "Duplicate Claim"
+                message: "Duplicate claim detected: policy=POL-AB123, type=MEDICAL, incident_date=2026-03-08"
+                timestamp: "2026-03-10T09:00:00"
+                details: []
+
+  /claims/{claimId}:
+    get:
+      tags: [Claims]
+      summary: Get claim status by ID
+      description: Retrieves a single claim and its current status by claim ID.
+      operationId: getClaimStatus
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 42
+      responses:
+        '200':
+          description: Claim found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '404':
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                error: "Claim Not Found"
+                message: "Claim not found with ID: 42"
+                timestamp: "2026-03-10T09:00:00"
+                details: []
+
+  /claims/{claimId}/review:
+    patch:
+      tags: [Claims]
+      summary: Approve or reject a claim
+      description: |
+        Updates the claim status to `APPROVED` or `REJECTED` and appends a `ClaimHistory` record.
+
+        - `action: APPROVE` → sets status to `APPROVED`
+        - `action: REJECT` → sets status to `REJECTED`
+
+        `reviewerNotes` is optional for approval but strongly recommended for rejection.
+      operationId: reviewClaim
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 42
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimReviewRequest'
+            examples:
+              approve:
+                summary: Approve a claim
+                value:
+                  action: "APPROVE"
+                  reviewerNotes: "All documentation verified. Claim is within policy limits."
+              reject:
+                summary: Reject a claim
+                value:
+                  action: "REJECT"
+                  reviewerNotes: "Incident occurred outside policy effective dates."
+      responses:
+        '200':
+          description: Claim reviewed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /claims/policy/{policyId}:
+    get:
+      tags: [Claims]
+      summary: List all claims for a policy
+      description: Returns all claims submitted against the given policy ID.
+      operationId: getClaimsByPolicy
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 7
+      responses:
+        '200':
+          description: List of claims (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClaimResponse'
+
+  # ─────────────────────────────────────────────
+  # CLAIM HISTORY
+  # ─────────────────────────────────────────────
+
+  /claims/{claimId}/history:
+    get:
+      tags: [Claim History]
+      summary: Get audit history for a claim
+      description: |
+        Returns all status change records for the given claim, ordered by timestamp descending
+        (most recent first).
+
+        The first record in the list represents the current state.
+      operationId: getClaimHistory
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 42
+      responses:
+        '200':
+          description: Claim history list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClaimHistoryResponse'
+              example:
+                - historyId: 2
+                  claimId: 42
+                  status: "APPROVED"
+                  timestamp: "2026-03-10T11:30:00"
+                  reviewerNotes: "All documentation verified."
+                - historyId: 1
+                  claimId: 42
+                  status: "SUBMITTED"
+                  timestamp: "2026-03-10T09:00:00"
+                  reviewerNotes: null
+        '404':
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ─────────────────────────────────────────────
+  # POLICIES
+  # ─────────────────────────────────────────────
+
+  /policies/{policyNumber}:
+    get:
+      tags: [Policies]
+      summary: Get policy by policy number
+      description: |
+        Retrieves a policy and its active per-type coverage limits.
+
+        The `coverageLimits` map contains only **active** coverage entries
+        (where `is_active = true`).
+
+        Policy number format: `POL-` followed by exactly 5 uppercase alphanumeric characters.
+        Example: `POL-AB123`
+      operationId: getPolicy
+      parameters:
+        - name: policyNumber
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^POL-[A-Z0-9]{5}$'
+            example: "POL-AB123"
+      responses:
+        '200':
+          description: Policy found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+              example:
+                policyId: 7
+                policyNumber: "POL-AB123"
+                customerId: 1001
+                status: "ACTIVE"
+                effectiveDate: "2025-01-01"
+                expiryDate: "2027-12-31"
+                coverageLimit: 50000.00
+                coverageLimits:
+                  MEDICAL: 10000.00
+                  DENTAL: 2000.00
+                  VISION: 1000.00
+                  AUTO: 20000.00
+        '404':
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                error: "Policy Not Found"
+                message: "Policy not found: POL-AB123"
+                timestamp: "2026-03-10T09:00:00"
+                details: []
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+
+components:
+  schemas:
+
+    ClaimSubmissionRequest:
+      type: object
+      required:
+        - policyNumber
+        - claimType
+        - claimAmount
+        - incidentDate
+        - description
+      properties:
+        policyNumber:
+          type: string
+          pattern: '^POL-[A-Z0-9]{5}$'
+          description: "Policy number — must match format POL-XXXXX"
+          example: "POL-AB123"
+        claimType:
+          $ref: '#/components/schemas/ClaimType'
+        claimAmount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          description: "Claim amount in USD. Must be positive and not exceed per-type coverage limit."
+          example: 1500.00
+        incidentDate:
+          type: string
+          format: date
+          description: "Date of the insured incident. Must not be in the future."
+          example: "2026-03-08"
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: "Customer description of the incident"
+          example: "Required dental surgery following an emergency diagnosis of acute infection."
+
+    ClaimReviewRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          $ref: '#/components/schemas/ReviewAction'
+        reviewerNotes:
+          type: string
+          nullable: true
+          description: "Reviewer comments (recommended for REJECT; optional for APPROVE)"
+          example: "All documentation verified. Claim is within policy limits."
+
+    ClaimResponse:
+      type: object
+      properties:
+        claimId:
+          type: integer
+          format: int64
+          example: 42
+        policyId:
+          type: integer
+          format: int64
+          example: 7
+        policyNumber:
+          type: string
+          example: "POL-AB123"
+        claimType:
+          $ref: '#/components/schemas/ClaimType'
+        claimAmount:
+          type: number
+          format: decimal
+          example: 1500.00
+        incidentDate:
+          type: string
+          format: date
+          example: "2026-03-08"
+        description:
+          type: string
+          example: "Required dental surgery following an emergency diagnosis."
+        status:
+          $ref: '#/components/schemas/ClaimStatus'
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-03-10T09:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-03-10T11:30:00"
+
+    ClaimHistoryResponse:
+      type: object
+      properties:
+        historyId:
+          type: integer
+          format: int64
+          example: 2
+        claimId:
+          type: integer
+          format: int64
+          example: 42
+        status:
+          $ref: '#/components/schemas/ClaimStatus'
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-10T11:30:00"
+        reviewerNotes:
+          type: string
+          nullable: true
+          example: "All documentation verified."
+
+    PolicyResponse:
+      type: object
+      properties:
+        policyId:
+          type: integer
+          format: int64
+          example: 7
+        policyNumber:
+          type: string
+          example: "POL-AB123"
+        customerId:
+          type: integer
+          format: int64
+          example: 1001
+        status:
+          $ref: '#/components/schemas/PolicyStatus'
+        effectiveDate:
+          type: string
+          format: date
+          example: "2025-01-01"
+        expiryDate:
+          type: string
+          format: date
+          example: "2027-12-31"
+        coverageLimit:
+          type: number
+          format: decimal
+          description: "Overall aggregate coverage ceiling"
+          example: 50000.00
+        coverageLimits:
+          type: object
+          additionalProperties:
+            type: number
+            format: decimal
+          description: "Map of ClaimType → per-type coverage limit (active coverages only)"
+          example:
+            MEDICAL: 10000.00
+            DENTAL: 2000.00
+            VISION: 1000.00
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: "Coverage Exceeded"
+        message:
+          type: string
+          example: "Claim amount 5000.00 exceeds coverage limit 2000.00 for claim type MEDICAL"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-03-10T09:00:00"
+        details:
+          type: array
+          items:
+            type: string
+          description: "Per-field validation error messages (populated on 400 Validation Failed)"
+          example: []
+
+    ClaimType:
+      type: string
+      enum: [MEDICAL, DENTAL, VISION, LIFE, AUTO, HOME, DISABILITY]
+      description: "Type of insurance claim"
+      example: MEDICAL
+
+    ClaimStatus:
+      type: string
+      enum: [SUBMITTED, IN_REVIEW, APPROVED, REJECTED]
+      description: "Current lifecycle status of a claim"
+      example: SUBMITTED
+
+    PolicyStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, EXPIRED, CANCELLED, PENDING]
+      description: "Current status of an insurance policy"
+      example: ACTIVE
+
+    ReviewAction:
+      type: string
+      enum: [APPROVE, REJECT]
+      description: "Admin action on a claim review"
+      example: APPROVE

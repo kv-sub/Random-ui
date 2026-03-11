@@ -1,5 +1,6 @@
 package com.insurance.claim.service;
 
+import com.insurance.claim.dto.ClaimReviewRequest;
 import com.insurance.claim.dto.ClaimSubmissionRequest;
 import com.insurance.claim.entity.*;
 import com.insurance.claim.exception.*;
@@ -180,5 +181,102 @@ class ClaimServiceTest {
 
         assertThatThrownBy(() -> claimService.getClaimStatus(999L))
                 .isInstanceOf(ClaimNotFoundException.class);
+    }
+
+    @Test
+    void submitClaim_PolicyExpired_ThrowsPolicyInactiveException() {
+        activePolicy.setExpiryDate(LocalDate.now().minusDays(1));
+        when(policyRepository.findByPolicyNumberWithCoverages("POL-10001"))
+                .thenReturn(Optional.of(activePolicy));
+
+        assertThatThrownBy(() -> claimService.submitClaim(validRequest))
+                .isInstanceOf(PolicyInactiveException.class)
+                .hasMessageContaining("OUT_OF_DATE_RANGE");
+    }
+
+    @Test
+    void submitClaim_PolicyNotYetEffective_ThrowsPolicyInactiveException() {
+        activePolicy.setEffectiveDate(LocalDate.now().plusDays(10));
+        when(policyRepository.findByPolicyNumberWithCoverages("POL-10001"))
+                .thenReturn(Optional.of(activePolicy));
+
+        assertThatThrownBy(() -> claimService.submitClaim(validRequest))
+                .isInstanceOf(PolicyInactiveException.class)
+                .hasMessageContaining("OUT_OF_DATE_RANGE");
+    }
+
+    @Test
+    void reviewClaim_ApproveClaim_ReturnsApprovedResponse() {
+        Claim claim = buildBasicClaim(1L, ClaimStatus.SUBMITTED);
+
+        ClaimReviewRequest reviewRequest = new ClaimReviewRequest();
+        reviewRequest.setAction(ClaimReviewRequest.ReviewAction.APPROVE);
+        reviewRequest.setReviewerNotes("Approved after documentation review");
+
+        when(claimRepository.findById(1L)).thenReturn(Optional.of(claim));
+        when(claimRepository.save(any(Claim.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = claimService.reviewClaim(1L, reviewRequest);
+
+        assertThat(response.getStatus()).isEqualTo(ClaimStatus.APPROVED);
+    }
+
+    @Test
+    void reviewClaim_RejectClaim_ReturnsRejectedResponse() {
+        Claim claim = buildBasicClaim(1L, ClaimStatus.SUBMITTED);
+
+        ClaimReviewRequest reviewRequest = new ClaimReviewRequest();
+        reviewRequest.setAction(ClaimReviewRequest.ReviewAction.REJECT);
+        reviewRequest.setReviewerNotes("Insufficient documentation");
+
+        when(claimRepository.findById(1L)).thenReturn(Optional.of(claim));
+        when(claimRepository.save(any(Claim.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = claimService.reviewClaim(1L, reviewRequest);
+
+        assertThat(response.getStatus()).isEqualTo(ClaimStatus.REJECTED);
+    }
+
+    @Test
+    void reviewClaim_ClaimNotFound_ThrowsClaimNotFoundException() {
+        ClaimReviewRequest reviewRequest = new ClaimReviewRequest();
+        reviewRequest.setAction(ClaimReviewRequest.ReviewAction.APPROVE);
+        when(claimRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> claimService.reviewClaim(999L, reviewRequest))
+                .isInstanceOf(ClaimNotFoundException.class);
+    }
+
+    @Test
+    void getClaimsByPolicy_MultipleClaims_ReturnsList() {
+        Claim claim1 = buildBasicClaim(1L, ClaimStatus.SUBMITTED);
+        Claim claim2 = buildBasicClaim(2L, ClaimStatus.APPROVED);
+        when(claimRepository.findByPolicy_PolicyId(1L)).thenReturn(List.of(claim1, claim2));
+
+        var result = claimService.getClaimsByPolicy(1L);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting("claimId").containsExactly(1L, 2L);
+    }
+
+    @Test
+    void getClaimsByPolicy_NoClaims_ReturnsEmptyList() {
+        when(claimRepository.findByPolicy_PolicyId(999L)).thenReturn(Collections.emptyList());
+
+        var result = claimService.getClaimsByPolicy(999L);
+
+        assertThat(result).isEmpty();
+    }
+
+    private Claim buildBasicClaim(Long id, ClaimStatus status) {
+        return Claim.builder()
+                .claimId(id)
+                .policy(activePolicy)
+                .claimType(ClaimType.MEDICAL)
+                .claimAmount(new BigDecimal("5000.00"))
+                .incidentDate(LocalDate.now().minusDays(3))
+                .description("Medical treatment")
+                .status(status)
+                .build();
     }
 }

@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.insurance.claim.controller.PolicyControllerIT
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 20.22 s -- in com.insurance.claim.controller.PolicyControllerIT

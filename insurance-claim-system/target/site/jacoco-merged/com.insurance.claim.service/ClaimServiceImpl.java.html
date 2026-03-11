@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ClaimServiceImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Insurance Claim Submission System</a> &gt; <a href="index.source.html" class="el_package">com.insurance.claim.service</a> &gt; <span class="el_source">ClaimServiceImpl.java</span></div><h1>ClaimServiceImpl.java</h1><pre class="source lang-java linenums">package com.insurance.claim.service;
+
+import com.insurance.claim.dto.ClaimResponse;
+import com.insurance.claim.dto.ClaimReviewRequest;
+import com.insurance.claim.dto.ClaimSubmissionRequest;
+import com.insurance.claim.entity.*;
+import com.insurance.claim.exception.*;
+import com.insurance.claim.repository.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+<span class="fc" id="L19">@Slf4j</span>
+public class ClaimServiceImpl implements ClaimService {
+
+    private final ClaimRepository claimRepository;
+    private final PolicyRepository policyRepository;
+    private final PolicyCoverageRepository policyCoverageRepository;
+
+    @Override
+    @Transactional
+    public ClaimResponse submitClaim(ClaimSubmissionRequest request) {
+<span class="fc" id="L29">        log.info(&quot;Submitting claim for policy: {}, type: {}&quot;, request.getPolicyNumber(), request.getClaimType());</span>
+
+        // 1. Validate and fetch policy
+<span class="fc" id="L32">        Policy policy = policyRepository.findByPolicyNumberWithCoverages(request.getPolicyNumber())</span>
+<span class="fc" id="L33">                .orElseThrow(() -&gt; new PolicyNotFoundException(request.getPolicyNumber()));</span>
+
+        // 2. Check policy is active
+<span class="fc bfc" id="L36" title="All 2 branches covered.">        if (policy.getStatus() != PolicyStatus.ACTIVE) {</span>
+<span class="fc" id="L37">            throw new PolicyInactiveException(policy.getPolicyNumber(), policy.getStatus().name());</span>
+        }
+
+        // 3. Check policy is within valid date range
+<span class="fc" id="L41">        var today = java.time.LocalDate.now();</span>
+<span class="fc bfc" id="L42" title="All 4 branches covered.">        if (today.isBefore(policy.getEffectiveDate()) || today.isAfter(policy.getExpiryDate())) {</span>
+<span class="fc" id="L43">            throw new PolicyInactiveException(policy.getPolicyNumber(), &quot;OUT_OF_DATE_RANGE&quot;);</span>
+        }
+
+        // 4. Verify coverage for the claim type
+<span class="fc" id="L47">        PolicyCoverage coverage = policyCoverageRepository</span>
+<span class="fc" id="L48">                .findByPolicy_PolicyIdAndClaimTypeAndIsActiveTrue(policy.getPolicyId(), request.getClaimType())</span>
+<span class="fc" id="L49">                .orElseThrow(() -&gt; new InvalidClaimTypeException(</span>
+<span class="fc" id="L50">                        request.getClaimType().name(), request.getPolicyNumber()));</span>
+
+        // 5. Check coverage limit
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        if (request.getClaimAmount().compareTo(coverage.getLimitAmount()) &gt; 0) {</span>
+<span class="fc" id="L54">            throw new CoverageExceededException(</span>
+<span class="fc" id="L55">                    request.getClaimAmount(), coverage.getLimitAmount(), request.getClaimType().name());</span>
+        }
+
+        // 6. Duplicate detection — same policy, type, incident_date within 24 hours
+<span class="fc" id="L59">        LocalDateTime oneDayAgo = LocalDateTime.now().minusHours(24);</span>
+<span class="fc" id="L60">        List&lt;Claim&gt; duplicates = claimRepository.findDuplicateClaims(</span>
+<span class="fc" id="L61">                policy.getPolicyId(), request.getClaimType(), request.getIncidentDate(), oneDayAgo);</span>
+<span class="fc bfc" id="L62" title="All 2 branches covered.">        if (!duplicates.isEmpty()) {</span>
+<span class="fc" id="L63">            throw new DuplicateClaimException(</span>
+<span class="fc" id="L64">                    policy.getPolicyNumber(),</span>
+<span class="fc" id="L65">                    request.getClaimType().name(),</span>
+<span class="fc" id="L66">                    request.getIncidentDate().toString());</span>
+        }
+
+        // 7. Persist claim
+<span class="fc" id="L70">        Claim claim = Claim.builder()</span>
+<span class="fc" id="L71">                .policy(policy)</span>
+<span class="fc" id="L72">                .claimType(request.getClaimType())</span>
+<span class="fc" id="L73">                .claimAmount(request.getClaimAmount())</span>
+<span class="fc" id="L74">                .incidentDate(request.getIncidentDate())</span>
+<span class="fc" id="L75">                .description(request.getDescription())</span>
+<span class="fc" id="L76">                .status(ClaimStatus.SUBMITTED)</span>
+<span class="fc" id="L77">                .build();</span>
+
+<span class="fc" id="L79">        ClaimHistory historyEntry = ClaimHistory.builder()</span>
+<span class="fc" id="L80">                .claim(claim)</span>
+<span class="fc" id="L81">                .status(ClaimStatus.SUBMITTED)</span>
+<span class="fc" id="L82">                .reviewerNotes(&quot;Claim submitted&quot;)</span>
+<span class="fc" id="L83">                .build();</span>
+<span class="fc" id="L84">        claim.getHistory().add(historyEntry);</span>
+
+<span class="fc" id="L86">        Claim saved = claimRepository.save(claim);</span>
+<span class="fc" id="L87">        log.info(&quot;Claim submitted successfully with ID: {}&quot;, saved.getClaimId());</span>
+
+<span class="fc" id="L89">        return mapToResponse(saved);</span>
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ClaimResponse getClaimStatus(Long claimId) {
+<span class="fc" id="L95">        Claim claim = claimRepository.findById(claimId)</span>
+<span class="fc" id="L96">                .orElseThrow(() -&gt; new ClaimNotFoundException(claimId));</span>
+<span class="fc" id="L97">        return mapToResponse(claim);</span>
+    }
+
+    @Override
+    @Transactional
+    public ClaimResponse reviewClaim(Long claimId, ClaimReviewRequest reviewRequest) {
+<span class="fc" id="L103">        log.info(&quot;Reviewing claim ID: {}, action: {}&quot;, claimId, reviewRequest.getAction());</span>
+
+<span class="fc" id="L105">        Claim claim = claimRepository.findById(claimId)</span>
+<span class="fc" id="L106">                .orElseThrow(() -&gt; new ClaimNotFoundException(claimId));</span>
+
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        ClaimStatus newStatus = reviewRequest.getAction() == ClaimReviewRequest.ReviewAction.APPROVE</span>
+<span class="fc" id="L109">                ? ClaimStatus.APPROVED</span>
+<span class="fc" id="L110">                : ClaimStatus.REJECTED;</span>
+
+<span class="fc" id="L112">        claim.setStatus(newStatus);</span>
+
+<span class="fc" id="L114">        ClaimHistory historyEntry = ClaimHistory.builder()</span>
+<span class="fc" id="L115">                .claim(claim)</span>
+<span class="fc" id="L116">                .status(newStatus)</span>
+<span class="fc" id="L117">                .reviewerNotes(reviewRequest.getReviewerNotes())</span>
+<span class="fc" id="L118">                .build();</span>
+<span class="fc" id="L119">        claim.getHistory().add(historyEntry);</span>
+
+<span class="fc" id="L121">        Claim updated = claimRepository.save(claim);</span>
+<span class="fc" id="L122">        return mapToResponse(updated);</span>
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List&lt;ClaimResponse&gt; getClaimsByPolicy(Long policyId) {
+<span class="fc" id="L128">        return claimRepository.findByPolicy_PolicyId(policyId).stream()</span>
+<span class="fc" id="L129">                .map(this::mapToResponse)</span>
+<span class="fc" id="L130">                .toList();</span>
+    }
+
+    private ClaimResponse mapToResponse(Claim claim) {
+<span class="fc" id="L134">        return ClaimResponse.builder()</span>
+<span class="fc" id="L135">                .claimId(claim.getClaimId())</span>
+<span class="fc" id="L136">                .policyId(claim.getPolicy().getPolicyId())</span>
+<span class="fc" id="L137">                .policyNumber(claim.getPolicy().getPolicyNumber())</span>
+<span class="fc" id="L138">                .claimType(claim.getClaimType())</span>
+<span class="fc" id="L139">                .claimAmount(claim.getClaimAmount())</span>
+<span class="fc" id="L140">                .incidentDate(claim.getIncidentDate())</span>
+<span class="fc" id="L141">                .description(claim.getDescription())</span>
+<span class="fc" id="L142">                .status(claim.getStatus())</span>
+<span class="fc" id="L143">                .createdAt(claim.getCreatedAt())</span>
+<span class="fc" id="L144">                .updatedAt(claim.getUpdatedAt())</span>
+<span class="fc" id="L145">                .build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

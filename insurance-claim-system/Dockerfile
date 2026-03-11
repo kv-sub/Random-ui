@@ -6,7 +6,7 @@ COPY pom.xml .
 COPY src ./src
 
 RUN apk add --no-cache maven && \
-    mvn -B clean package -DskipTests
+    mvn -B clean package
 
 # --- Runtime stage ---
 FROM eclipse-temurin:17-jre-alpine AS runtime
