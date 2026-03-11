@@ -1,6 +1,6 @@
 # Insurance Claim Submission System — Documentation Index
 
-This folder contains the complete Software Development Life Cycle (SDLC) documentation for the **Insurance Claim Submission System**, maintained continuously across 9 sprints to provide a traceable, auditable record of design decisions, architecture, and delivery.
+This folder contains the complete Software Development Life Cycle (SDLC) documentation for the **Insurance Claim Submission System**, maintained continuously across 10 sprints to provide a traceable, auditable record of design decisions, architecture, and delivery.
 
 ---
 
@@ -20,7 +20,8 @@ This folder contains the complete Software Development Life Cycle (SDLC) documen
 | 10 | [gherkin/07-gherkin-scenarios.md](gherkin/07-gherkin-scenarios.md) | Testing | Full Gherkin BDD feature files for all user stories |
 | 11 | [gherkin/gherkin-scenarios-jira.csv](gherkin/gherkin-scenarios-jira.csv) | Testing | **Jira-importable CSV** — Gherkin test scenarios as Jira sub-tasks |
 | 12 | [synthetic-data/08-synthetic-data-plan.md](synthetic-data/08-synthetic-data-plan.md) | Testing | Synthetic test data generation plan — seed scripts, test personas, boundary cases |
-| 13 | [sprint-plan/09-sprint-plan.md](sprint-plan/09-sprint-plan.md) | Agile | Sprint task breakdown — 9 sprints, story points, DoD, velocity |
+| 13 | [sprint-plan/09-sprint-plan.md](sprint-plan/09-sprint-plan.md) | Agile | Sprint task breakdown — 10 sprints, story points, DoD, velocity |
+| 14 | [`synthetic-agent/`](../synthetic-agent/) | Agent | Synthetic Data Generation Agent — Python/Streamlit, Dockerfile, requirements (Sprint 10) |
 
 ---
 
@@ -29,9 +30,10 @@ This folder contains the complete Software Development Life Cycle (SDLC) documen
 **System Name:** Insurance Claim Submission System  
 **Backend:** Java 21 · Spring Boot 3 · PostgreSQL · JPA/Hibernate  
 **Frontend:** React 19 · TypeScript · Vite · TanStack Query · Zustand · Tailwind CSS  
+**Synthetic Data Agent:** Python 3.12 · Streamlit · Faker · psycopg2 · LLM (gpt-4.1 via AICafe)  
 **API Style:** REST · JSON · OpenAPI 3.0 (Swagger UI at `/swagger-ui.html`)  
 **Auth Model:** Role-based (CUSTOMER / ADMIN) — demo implementation, no JWT in current scope  
-**Deployment:** Docker · Docker Compose (backend + PostgreSQL)
+**Deployment:** Docker · Docker Compose with env-based profile routing (`prod` / `test`)
 
 ---
 
@@ -41,4 +43,5 @@ This folder contains the complete Software Development Life Cycle (SDLC) documen
 2. **Backend developer** → [LLD.md](LLD.md) + [data-model/04-database-model.md](data-model/04-database-model.md) + [api/05-openapi.yaml](api/05-openapi.yaml)
 3. **QA / tester** → [gherkin/07-gherkin-scenarios.md](gherkin/07-gherkin-scenarios.md) + [synthetic-data/08-synthetic-data-plan.md](synthetic-data/08-synthetic-data-plan.md)
 4. **Product Owner / Scrum Master** → [user-stories/06-user-stories.md](user-stories/06-user-stories.md) + [sprint-plan/09-sprint-plan.md](sprint-plan/09-sprint-plan.md)
-5. **Jira import** → Use the two CSV files in `user-stories/` and `gherkin/`
+5. **Synthetic Data Agent** → See `../synthetic-agent/` for Dockerfile + `../main.py` for the agent source. Run the test stack with `docker compose --env-file .env.test --profile test up --build` from `insurance-claim-system/`.
+6. **Jira import** → Use the two CSV files in `user-stories/` and `gherkin/`

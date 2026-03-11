@@ -1,10 +1,10 @@
 # Low Level Design (LLD)
 ## Insurance Claim Submission System
 
-**Version:** 1.3  
+**Version:** 1.4  
 **Status:** Final  
 **Authors:** Engineering Team  
-**Last Updated:** March 2026
+**Last Updated:** May 2026
 
 ---
 
@@ -16,6 +16,7 @@
 | 1.1     | 2026-02-02 | Added `ClaimService`, `ClaimController`, all Claim DTO definitions (Sprint 3)        |
 | 1.2     | 2026-03-02 | Added `ClaimHistory` entity, timeline query design, history endpoint (Sprint 5)      |
 | 1.3     | 2026-03-30 | Added audit trail service, `GlobalExceptionHandler` full detail (Sprint 7)           |
+| 1.4     | 2026-05-11 | Added Synthetic Data Agent component design, generation pipeline, Docker wiring (Sprint 10) |
 
 ---
 
@@ -34,6 +35,7 @@
 12. [Frontend Architecture](#12-frontend-architecture)
 13. [API Error Catalogue](#13-api-error-catalogue)
 14. [Business Rules Reference](#14-business-rules-reference)
+15. [Synthetic Data Agent — Component Design](#15-synthetic-data-agent--component-design)
 
 ---
 
@@ -813,3 +815,87 @@ authStore
 | BR-10 | Every claim status change must produce a `ClaimHistory` record | `ClaimServiceImpl` (all state-changing methods) |
 | BR-11 | `ClaimHistory` records are append-only — never deleted or updated | No UPDATE on claim_history |
 | BR-12 | Only `SUBMITTED` and `IN_REVIEW` claims can be approved/rejected | Service-layer guard |
+
+---
+
+## 15. Synthetic Data Agent — Component Design
+
+### Overview
+
+The Synthetic Data Agent (`main.py`) is a Streamlit single-page application that generates realistic PostgreSQL test data from any live schema. It runs as a Docker container in the `test` profile only.
+
+### Module Structure (`main.py`)
+
+```
+main.py
+├── Configuration (sidebar widgets)        — DB connection, LLM endpoint, generation params
+├── list_schemas_with_tables()             — inspect DB for available schemas
+├── discover_schema(src_schema)            — read information_schema to build column-type map
+├── call_llm_spec(schema)                  — POST to OpenAI-compatible endpoint; returns JSON spec
+│   └── local_fallback_spec()              — rule-based fallback if LLM is unavailable
+├── Pydantic models
+│   ├── ColumnSpec                         — per-column strategy + parameters
+│   ├── TableSpec                          — dict of ColumnSpecs
+│   └── GenSpec                            — row_counts + tables; validated on LLM output
+├── Generator helpers
+│   ├── gen_decimal / gen_numeric_for_type  — numeric + monetary values
+│   ├── gen_date / gen_ts / gen_time        — temporal values
+│   ├── call_faker(fake, provider)          — safe Faker provider dispatch
+├── generate_rows(schema, spec, ...)       — produce Dict[table → List[row]]
+├── load_to_postgres(schema, rows, schema) — CREATE SCHEMA, DROP/CREATE TABLE, bulk INSERT
+└── UI Flow (sequential steps)
+    ├── Step 1: Discover Schema
+    ├── Step 2: LLM Spec
+    ├── Step 3: Generate Data
+    └── Step 4: Load to Database
+```
+
+### Generation Strategies
+
+| Strategy | Column Types | Parameters |
+|---|---|---|
+| `uuid` | UUID | — |
+| `boolean` | BOOLEAN | — |
+| `numeric` | INTEGER, BIGINT, SMALLINT, NUMERIC, REAL, MONEY | `min`, `max`, `decimals` |
+| `date` | DATE | `date_start`, `date_end` |
+| `timestamp` | TIMESTAMP, TIMESTAMPTZ | `ts_start`, `ts_end` |
+| `time` | TIME, TIMETZ | — |
+| `datetime` | hybrid date+time | `ts_start`, `ts_end` |
+| `faker` | TEXT, VARCHAR, CHAR | `provider` (dotted Faker path) |
+| `categorical` | TEXT enumerations | `choices: []` |
+| `json` | JSON, JSONB | generates `{"key": ..., "value": ...}` |
+| `bytes` | BYTEA | 16 random bytes hex-encoded |
+
+### LLM Integration
+
+```
+POST {BASE_URL}/deployments/{DEPLOYMENT_NAME}/chat/completions
+Headers: api-key, Content-Type: application/json
+Body: { model, temperature: 0.2, messages: [system_prompt, schema_json] }
+Response: GenSpec JSON (validated by Pydantic GenSpec model)
+Fallback: local_fallback_spec() on any network/SSL/parse error
+```
+
+### Docker Wiring
+
+```
+service: synthetic-agent
+build context: workspace root (../)
+dockerfile: synthetic-agent/Dockerfile
+image base: python:3.12-slim
+env vars injected:
+  PG_HOST, PG_PORT, PG_DATABASE, PG_USER, PG_PASSWORD, SRC_SCHEMA, TGT_SCHEMA
+profile: test            ← only runs when --profile test is passed
+depends_on: db (service_healthy)
+port: 8501
+```
+
+### Security Notes
+
+| Concern | Mitigation |
+|---|---|
+| DB credentials in env | Injected via Docker Compose env vars; not hardcoded |
+| SQL injection in DDL | Table/column names parameterised with `psycopg2.sql.Identifier` |
+| Bulk insert injection | Row values use parameterised `execute_values` placeholders |
+| LLM output trust | LLM response parsed and validated by Pydantic `GenSpec` before use |
+| Production exposure | Service is profile-gated (`profiles: [test]`) — never starts in prod stack |

@@ -1,8 +1,8 @@
 # Sprint Plan
 ## Insurance Claim Submission System — Feature-by-Feature Delivery
 
-**Version:** 1.2  
-**Date:** March 2026  
+**Version:** 1.3  
+**Date:** May 2026  
 **Methodology:** Scrum, 2-week sprints  
 **Team:** 1 backend engineer, 1 frontend engineer, 1 QA engineer, 1 product owner  
 **Definition of Done (DoD):** Code reviewed + merged, unit tests passing, integration tests passing, acceptance criteria verified by PO, documentation updated
@@ -16,6 +16,7 @@
 | 1.0     | 2026-01-05 | Initial sprint plan — 9 sprints mapped, user story assignments, initial story point estimates |
 | 1.1     | 2026-03-02 | Adjusted Sprint 6 scope after Sprint 5 retro — split admin review tasks across Sprint 6–7    |
 | 1.2     | 2026-04-13 | Marked Sprints 1–7 complete; updated Sprint 8–9 scope following integration test review     |
+| 1.3     | 2026-05-11 | Added Sprint 10 — Synthetic Data Generation Agent integration (Epic 7)                       |
 
 ---
 
@@ -30,11 +31,14 @@ graph LR
     E5[Epic 5<br/>Admin Review]
     E6[Epic 6<br/>Audit Trail]
 
+    E7[Epic 7<br/>Synthetic Data Agent]
+
     E1 --> E2
     E2 --> E3
     E3 --> E4
     E4 --> E5
     E5 --> E6
+    E6 --> E7
 
     style E1 fill:#4A90D9,color:#fff
     style E2 fill:#50C878,color:#fff
@@ -42,6 +46,7 @@ graph LR
     style E4 fill:#9B59B6,color:#fff
     style E5 fill:#E74C3C,color:#fff
     style E6 fill:#1ABC9C,color:#fff
+    style E7 fill:#F39C12,color:#fff
 ```
 
 ---
@@ -91,6 +96,11 @@ gantt
     section Sprint 9
     Production Hardening              :done, sp9a, 2026-04-27, 3d
     Documentation Finalisation        :done, sp9b, 2026-04-29, 3d
+
+    section Sprint 10
+    Synthetic Agent Containerisation  :done, sp10a, 2026-05-11, 3d
+    Docker Compose Env Routing        :done, sp10b, 2026-05-13, 2d
+    Agent Documentation Updates       :done, sp10c, 2026-05-18, 4d
 ```
 
 ---
@@ -355,14 +365,46 @@ gantt
 
 ---
 
-## 12. Capacity & Velocity Summary
+## 12. Sprint 10 — Synthetic Data Generation Agent
+
+**Sprint Goal:** Integrate the Synthetic Data Generation Agent into the project. The agent connects to a live PostgreSQL database, introspects the schema, uses an LLM to create a generation plan, produces synthetic rows with Faker, and bulk-inserts them into a `synthetic` schema. Docker Compose supports environment-profile switching so the agent runs automatically in the `test` profile and is excluded from the `prod` profile.
+
+**Epic:** Epic 7 — Synthetic Data Agent  
+**Story Points Total:** 13
+
+### Tasks
+
+| Task ID | Title | Type | Assignee | Points | Status |
+|---|---|---|---|
+| T10-01 | Create `synthetic-agent/` directory with `Dockerfile` and `requirements.txt` | DevOps | DevOps | 2 | Done |
+| T10-02 | Update `main.py` sidebar to read DB config from environment variables | Backend | Python Dev | 2 | Done |
+| T10-03 | Add `synthetic-agent` service to `docker-compose.yml` with `test` profile | DevOps | DevOps | 2 | Done |
+| T10-04 | Create `.env.prod` and `.env.test` environment files with documented usage | DevOps | DevOps | 1 | Done |
+| T10-05 | Update `HLD.md` — add Synthetic Data Agent service to system overview | Docs | PO | 2 | Done |
+| T10-06 | Update `LLD.md` — add agent component structure and design notes | Docs | Backend | 2 | Done |
+| T10-07 | Update architecture diagrams to include synthetic-agent container | Docs | Backend | 1 | Done |
+| T10-08 | Update service decomposition doc with agent service boundary | Docs | Backend | 1 | Done |
+| T10-09 | Update `CHANGELOG.md` with Sprint 10 entry | Docs | PO | 1 | Done |
+| T10-10 | Smoke test: verify agent starts and connects inside `test` profile stack | QA | QA | 1 | Done |
+
+**Definition of Done Check:**
+- [ ] `docker compose --env-file .env.test --profile test up --build` starts db + app + synthetic-agent
+- [ ] `docker compose --env-file .env.prod up --build` starts db + app only (no agent)
+- [ ] Streamlit UI reachable at `http://localhost:8501` in test profile
+- [ ] Agent sidebar picks up `PG_HOST`, `PG_DATABASE`, `PG_USER`, `PG_PASSWORD` from Docker env
+- [ ] Agent can discover the `public` schema and load synthetic data into the `synthetic` schema
+- [ ] All docs updated and version-bumped
+
+---
+
+## 13. Capacity & Velocity Summary
 
 ```mermaid
 xychart-beta
     title "Story Points Per Sprint"
-    x-axis ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5", "Sprint 6", "Sprint 7", "Sprint 8", "Sprint 9"]
+    x-axis ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Sprint 5", "Sprint 6", "Sprint 7", "Sprint 8", "Sprint 9", "Sprint 10"]
     y-axis "Story Points" 0 --> 20
-    bar [10, 11, 18, 10, 10, 15, 11, 12, 9]
+    bar [10, 11, 18, 10, 10, 15, 11, 12, 9, 13]
 ```
 
 | Sprint | Story Points | Primary Focus |
@@ -376,11 +418,12 @@ xychart-beta
 | Sprint 7 | 11 | Audit Trail + Hardening |
 | Sprint 8 | 12 | Integration Testing |
 | Sprint 9 | 9 | Production Hardening |
-| **Total** | **106** | |
+| Sprint 10 | 13 | Synthetic Data Agent Integration |
+| **Total** | **119** | |
 
 ---
 
-## 13. Risk Register
+## 14. Risk Register
 
 | Risk ID | Risk | Probability | Impact | Mitigation |
 |---|---|---|---|---|
@@ -389,3 +432,6 @@ xychart-beta
 | R-03 | 24h duplicate detection edge case at midnight | Medium | High | Explicit boundary tests in Sprint 4 |
 | R-04 | Frontend Zod v4 API changes | Low | Medium | Pin to Zod 4.x, test in Sprint 3 |
 | R-05 | Coverage threshold not met | Medium | Medium | JaCoCo fail-build gate set in Sprint 8 |
+| R-06 | LLM API unavailable or SSL cert mismatch in corporate network | Medium | Low | Agent falls back to local generation plan; SSL checkbox in UI |  
+| R-07 | Synthetic data FK violations if agent generates child rows before parent | Low | High | Agent generates tables in schema-discovery order; FK-safe ordering documented |
+| R-08 | `synthetic` schema collides with `public` schema on prod DB | Low | High | Agent is profile-gated — only runs in `test` profile; never deployed to prod |
