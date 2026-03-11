@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Agent System] — 2026-03-11 · Role-Based Custom Agents for Agile SDLC
+
+### Added
+- **Orchestrator Agent** (`.github/prompts/agent-orchestrator.prompt.md`) — Coordinates the full SDLC workflow; manages phase gates, document versioning, and user approvals
+- **Product Owner Agent** (`.github/prompts/agent-product-owner.prompt.md`) — Gathers requirements, writes user stories & acceptance criteria, manages product backlog
+- **Architect Agent** (`.github/prompts/agent-architect.prompt.md`) — Produces HLD, architecture diagrams, technology stack decisions, and Architecture Decision Records
+- **System Designer Agent** (`.github/prompts/agent-system-designer.prompt.md`) — Produces LLD, database DDL, ER diagrams, OpenAPI spec, sequence diagrams, and business rules reference
+- **Sprint Planner Agent** (`.github/prompts/agent-sprint-planner.prompt.md`) — Produces sprint plans, task breakdowns, capacity tables, and retrospectives
+- **Developer Agent** (`.github/prompts/agent-developer.prompt.md`) — Implements code sprint-by-sprint following approved design docs; supports re-development from scratch
+- **Tester Agent** (`.github/prompts/agent-tester.prompt.md`) — Writes Gherkin BDD scenarios, Cucumber step definitions, Playwright E2E tests, and AC traceability matrix
+- **DevOps Agent** (`.github/prompts/agent-devops.prompt.md`) — Produces Dockerfiles, Docker Compose files, GitHub Actions CI/CD, coverage enforcement, and deployment docs
+- **Agent Interaction Model** (`docs/agents/00-agent-interaction-model.md`) — Documents agent roles, interaction diagram, document lineage, versioning convention
+- **Agent Usage Guide** (`docs/agents/README.md`) — How to invoke agents for new projects, changes, and re-development
+- **Project Master Record** (`docs/PROJECT_MASTER_RECORD.md`) — Living record of decisions, document versions, phase status, and sprint velocity
+
+### Context
+The project was originally built using 3 manual prompts (`.github/prompts/instructions-*.prompt.md`, `plan-*.prompt.md`). The agent system reverse-engineers the development process into 8 interactive, role-based agents covering the full agile SDLC — from requirements through architecture, design, planning, development, testing, and DevOps — with versioned documents and explicit user approval gates at each phase.
+
+---
+
 ## [Sprint 10] — 2026-05-11 to 2026-05-22 · Synthetic Data Generation Agent
 
 ### Added
