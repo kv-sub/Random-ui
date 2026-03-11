@@ -132,4 +132,54 @@ class ClaimControllerIT {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Coverage Exceeded"));
     }
+
+    @Test
+    void getClaimsByPolicy_ExistingPolicy_Returns200() throws Exception {
+        // First submit a claim so the policy has claims
+        ClaimSubmissionRequest request = new ClaimSubmissionRequest();
+        request.setPolicyNumber("POL-10001");
+        request.setClaimType(ClaimType.DENTAL);
+        request.setClaimAmount(new BigDecimal("1000.00"));
+        request.setIncidentDate(LocalDate.now().minusDays(10));
+        request.setDescription("Routine dental check and cleaning work");
+
+        var submitResult = mockMvc.perform(post("/api/v1/claims")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        var body = objectMapper.readTree(submitResult.getResponse().getContentAsString());
+        long policyId = body.get("policyId").asLong();
+
+        mockMvc.perform(get("/api/v1/claims/policy/" + policyId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    void reviewClaim_ApproveClaim_Returns200() throws Exception {
+        ClaimSubmissionRequest submitRequest = new ClaimSubmissionRequest();
+        submitRequest.setPolicyNumber("POL-10002");
+        submitRequest.setClaimType(ClaimType.MEDICAL);
+        submitRequest.setClaimAmount(new BigDecimal("2000.00"));
+        submitRequest.setIncidentDate(LocalDate.now().minusDays(7));
+        submitRequest.setDescription("Medical procedure covered under standard plan");
+
+        var submitResult = mockMvc.perform(post("/api/v1/claims")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(submitRequest)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        var body = objectMapper.readTree(submitResult.getResponse().getContentAsString());
+        long claimId = body.get("claimId").asLong();
+
+        String reviewJson = "{\"action\":\"APPROVE\",\"reviewerNotes\":\"Approved after review\"}";
+        mockMvc.perform(patch("/api/v1/claims/" + claimId + "/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+    }
 }

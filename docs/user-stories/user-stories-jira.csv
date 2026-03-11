@@ -1,0 +1,75 @@
+Issue Type,Epic Name,Summary,Description,Priority,Story Points,Sprint,Labels,Acceptance Criteria
+Epic,,EPIC: Authentication & Navigation,Role-based login and protected route navigation for customers and admins.,High,,,,
+Epic,,EPIC: Policy Management,Policy lookup and real-time coverage verification.,High,,,,
+Epic,,EPIC: Claim Submission,End-to-end claim submission with full server-side validation.,Critical,,,,
+Epic,,EPIC: Claim Tracking,Customer-facing claim status tracking and history timeline.,Medium,,,,
+Epic,,EPIC: Admin Claim Review,Admin approval and rejection workflows with audit persistence.,Critical,,,,
+Epic,,EPIC: Audit Trail,Admin audit trail view for claim status history.,Medium,,,,
+Story,EPIC: Authentication & Navigation,US-12: Role-Based Login,"As a user, I want to log in by selecting my role (CUSTOMER or ADMIN) so that I can access the appropriate section of the application.",High,5,Sprint 1,auth;frontend,"1. Login page displays a role selector with CUSTOMER and ADMIN options.
+2. Selecting CUSTOMER and clicking Login navigates to the customer dashboard.
+3. Selecting ADMIN and clicking Login navigates to the admin dashboard.
+4. Auth state is persisted in local storage using Zustand.
+5. Clicking Logout clears auth state and redirects to login page."
+Story,EPIC: Authentication & Navigation,US-13: Protected Route Navigation,"As an unauthenticated user, I want to be redirected to the login page when I try to access a protected route so that the system is secure.",High,5,Sprint 1,auth;frontend;routing,"1. Navigating to /dashboard while unauthenticated redirects to /login.
+2. Navigating to /admin while unauthenticated redirects to /login.
+3. Navigating to /admin as a CUSTOMER role redirects to an Unauthorised page.
+4. After login, the user is returned to their intended destination."
+Story,EPIC: Policy Management,US-01: Policy Lookup,"As a customer, I want to look up my insurance policy by policy number so that I can view my coverage details before submitting a claim.",High,5,Sprint 2,policy;frontend;backend,"1. A policy number input field is displayed on the PolicyLookupPage.
+2. Entering a valid policy number and submitting shows the policy details.
+3. The response includes policy number, customer ID, status, effective date, expiry date, and coverage limit.
+4. Entering a non-existent policy number shows a 404 error message.
+5. Entering an invalid format (not matching POL-XX000) shows a validation error before the API call fires.
+6. The ACTIVE status is clearly highlighted in the policy card."
+Story,EPIC: Policy Management,US-03: Real-time Policy Verification,"As a customer, I want to see my policy coverage details displayed in real time so that I know which claim types are available to me.",Medium,6,Sprint 2,policy;frontend;coverage,"1. Coverage types are displayed in a grid/list below the policy card.
+2. Each coverage shows the claim type, coverage limit amount, and active/inactive status.
+3. Inactive coverages are visually distinct (greyed out or marked inactive).
+4. Coverage details are fetched in the same API call as the policy.
+5. An empty state is shown if the policy has no coverages.
+6. Inactive coverages are not selectable when submitting a claim."
+Story,EPIC: Claim Submission,US-02: Submit Insurance Claim,"As a customer, I want to submit an insurance claim against my active policy so that I can request reimbursement for a covered loss.",Critical,8,Sprint 3,claim;submission;backend;frontend,"1. Claim submission form collects: policy number, claim type, amount, incident date, and description.
+2. Submitting a valid claim returns 201 Created with the new claim ID and SUBMITTED status.
+3. Submitting with a non-existent policy number returns 404 with message policy not found.
+4. Submitting against a non-ACTIVE policy returns 422 with message policy not active.
+5. Submitting a claim type not covered by the policy returns 422 with message coverage not found.
+6. Submitting against an inactive coverage returns 422 with message coverage not active.
+7. Submitting an amount exceeding the coverage limit returns 422 with message exceeds coverage limit.
+8. Submitting with amount <= 0 returns 400 Bad Request.
+9. Submitting with description shorter than 10 characters returns 400 Bad Request."
+Story,EPIC: Claim Submission,US-04: Duplicate Claim Prevention,"As a system, I want to prevent duplicate claim submissions for the same policy and claim type within 24 hours so that the database is not polluted.",High,5,Sprint 4,claim;validation;backend,"1. Submitting a claim for the same policy and type within 24 hours returns 409 Conflict.
+2. Submitting the same policy and type exactly 24 hours + 1 minute after the first submission returns 201.
+3. Submitting a different claim type for the same policy within 24 hours returns 201.
+4. The 409 error message clearly states why the submission was rejected."
+Story,EPIC: Claim Tracking,US-05: Track Claim Status,"As a customer, I want to view the current status of my submitted claim so that I know where it is in the review process.",Medium,5,Sprint 4,claim;status;frontend,"1. A ClaimStatusPage is accessible from the claims list.
+2. The page displays current status as a colour-coded badge.
+3. SUBMITTED is shown in blue, IN_REVIEW in yellow, APPROVED in green, REJECTED in red.
+4. The claim amount, type, and incident date are visible on the status page."
+Story,EPIC: Claim Tracking,US-06: View Claim History Timeline,"As a customer, I want to view the full history of status changes for my claim so that I can see how my claim progressed.",Medium,6,Sprint 5,claim;history;frontend,"1. A ClaimHistoryPage shows all history entries for a given claim.
+2. Entries are displayed in chronological order oldest-to-newest.
+3. Each entry shows the status, timestamp, and reviewer notes (if present).
+4. The timeline visually connects entries to show progression.
+5. History entries with no reviewer notes do not show an empty notes section."
+Story,EPIC: Claim Tracking,US-07: List Claims for Policy,"As a customer, I want to view all claims I have filed against a specific policy so that I have a full picture of my claim activity.",Medium,4,Sprint 5,claim;policy;frontend,"1. A claims list is accessible from the PolicyDetailPage.
+2. The list shows claim ID, type, amount, status badge, and submission date.
+3. Claims can be sorted by submission date (newest first by default).
+4. Clicking a claim row navigates to the ClaimStatusPage."
+Story,EPIC: Admin Claim Review,US-08: View Claim Detail Admin,"As an admin, I want to view the full details of any claim submitted by customers so that I can make an informed review decision.",High,4,Sprint 6,admin;claim;frontend,"1. AdminClaimsPage shows all claims in the system regardless of which policy they belong to.
+2. Each row includes claim ID, policy number, type, amount, status, and submission date.
+3. Clicking a claim row opens the ClaimDetailPage for admin.
+4. Admin claim detail shows customer ID, policy number, all claim fields, and current status."
+Story,EPIC: Admin Claim Review,US-09: Approve Claim,"As an admin, I want to approve a submitted claim so that the customer receives their reimbursement.",Critical,6,Sprint 6,admin;approve;backend;frontend,"1. Approve button is visible on the claim review modal for SUBMITTED and IN_REVIEW claims.
+2. Clicking Approve transitions the claim status to APPROVED.
+3. Approving a claim creates a new ClaimHistory entry with the APPROVED status and reviewer notes.
+4. Reviewer notes are optional on approval.
+5. The claim card updates to show APPROVED status after the action.
+6. Attempting to approve an already APPROVED claim returns 409."
+Story,EPIC: Admin Claim Review,US-10: Reject Claim,"As an admin, I want to reject a claim with a reason so that the customer is informed of the decision.",Critical,7,Sprint 6,admin;reject;backend;frontend,"1. Reject button is visible on the claim review modal for SUBMITTED and IN_REVIEW claims.
+2. Reviewer notes are mandatory when rejecting a claim.
+3. Clicking Reject with no notes shows a validation error on the notes field.
+4. Clicking Reject with notes transitions the claim to REJECTED.
+5. A ClaimHistory entry is created with REJECTED status and the provided reviewer notes.
+6. Attempting to reject an already REJECTED claim returns 409.
+7. Attempting to reject an APPROVED claim returns 409."
+Story,EPIC: Audit Trail,US-11: Audit Trail Admin,"As an admin, I want to see the full audit trail for any claim including all status transitions and reviewer notes so that I have a complete history of all actions taken.",Medium,6,Sprint 7,admin;audit;history;frontend,"1. Admin claim detail page shows full claim history timeline.
+2. Each timeline entry shows status, timestamp, and reviewer notes.
+3. The timeline is sorted chronologically.
+4. The initial SUBMITTED entry is always visible as the first entry."

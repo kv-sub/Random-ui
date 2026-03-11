@@ -28,4 +28,48 @@ class PolicyNumberValidatorTest {
     void nullValue_ReturnsTrue() {
         assertThat(validator.isValid(null, null)).isTrue();
     }
+
+    @Test
+    void blankValue_ReturnsTrue() {
+        assertThat(validator.isValid("", null)).isTrue();
+        assertThat(validator.isValid("   ", null)).isTrue();
+    }
+
+    @Test
+    void exactBoundaryLength_FiveChars_ReturnsTrue() {
+        assertThat(validator.isValid("POL-00001", null)).isTrue();
+        assertThat(validator.isValid("POL-ZZZZZ", null)).isTrue();
+    }
+
+    @Test
+    void fourCharsAfterPrefix_ReturnsFalse() {
+        assertThat(validator.isValid("POL-1234", null)).isFalse();
+        assertThat(validator.isValid("POL-ABCD", null)).isFalse();
+    }
+
+    @Test
+    void sixCharsAfterPrefix_ReturnsFalse() {
+        assertThat(validator.isValid("POL-123456", null)).isFalse();
+        assertThat(validator.isValid("POL-ABCDEF", null)).isFalse();
+    }
+
+    @Test
+    void specialCharsAfterPrefix_ReturnsFalse() {
+        assertThat(validator.isValid("POL-A@B3C", null)).isFalse();
+        assertThat(validator.isValid("POL-A B3C", null)).isFalse();
+        assertThat(validator.isValid("POL-A-B3C", null)).isFalse();
+    }
+
+    @Test
+    void mixedCaseAfterPrefix_ReturnsFalse() {
+        assertThat(validator.isValid("POL-aBcDe", null)).isFalse();
+        assertThat(validator.isValid("POL-AbCdE", null)).isFalse();
+    }
+
+    @Test
+    void wrongPrefix_ReturnsFalse() {
+        assertThat(validator.isValid("PAL-10001", null)).isFalse();
+        assertThat(validator.isValid("POL_10001", null)).isFalse();
+        assertThat(validator.isValid("-10001", null)).isFalse();
+    }
 }

@@ -1,0 +1,146 @@
+Issue Type,Summary,Description,Parent Summary,Priority,Labels,Sprint
+Test,TC-01: Successful policy lookup,"Scenario: Successful policy lookup
+  Given I am on the Policy Lookup page
+  When I enter policy number ""POL-AB123""
+  And I click Submit
+  Then I should see the policy details with status ""ACTIVE""
+  And I should see the coverage grid with coverage types and limits",US-01: Policy Lookup,High,gherkin;policy,Sprint 2
+Test,TC-02: Policy number not found,"Scenario: Policy number not found
+  Given I am on the Policy Lookup page
+  When I enter policy number ""POL-XXXXXX""
+  And I click Submit
+  Then I should see an error message ""Policy not found""
+  And the policy details card should not be displayed",US-01: Policy Lookup,High,gherkin;policy,Sprint 2
+Test,TC-03: Invalid policy number format,"Scenario: Invalid policy number format
+  Given I am on the Policy Lookup page
+  When I enter ""invalid-number""
+  And I click Submit
+  Then I should see a validation error before any API call is made
+  And the error should indicate the expected format",US-01: Policy Lookup,Medium,gherkin;policy;validation,Sprint 2
+Test,TC-04: Successful claim submission,"Scenario: Successful claim submission with all valid data
+  Given I am logged in as a CUSTOMER
+  And policy ""POL-AB123"" is ACTIVE with MEDICAL coverage limit of 10000
+  When I submit a claim with:
+    | policyNumber   | POL-AB123             |
+    | claimType      | MEDICAL               |
+    | claimAmount    | 1500.00               |
+    | incidentDate   | 2026-03-01            |
+    | description    | Medical treatment after workplace accident |
+  Then the response status should be 201 Created
+  And the claim status should be ""SUBMITTED""
+  And a ClaimHistory entry should exist with status SUBMITTED",US-02: Submit Insurance Claim,Critical,gherkin;claim;submission,Sprint 3
+Test,TC-05: Claim submission with non-existent policy,"Scenario: Claim submission with non-existent policy number
+  Given I am logged in as a CUSTOMER
+  When I submit a claim with policy number ""POL-XXXXXX""
+  Then the response status should be 404 Not Found
+  And the error message should contain ""Policy not found""",US-02: Submit Insurance Claim,Critical,gherkin;claim;validation,Sprint 3
+Test,TC-06: Claim submission with expired policy,"Scenario: Claim submission against expired policy
+  Given policy ""POL-EF789"" has status EXPIRED
+  When I submit a claim for policy ""POL-EF789""
+  Then the response status should be 422 Unprocessable Entity
+  And the error message should contain ""Policy is not active""",US-02: Submit Insurance Claim,Critical,gherkin;claim;validation,Sprint 3
+Test,TC-07: Claim amount exceeds coverage limit,"Scenario: Claim amount exceeds coverage limit
+  Given policy ""POL-AB123"" has MEDICAL coverage with limit 10000
+  When I submit a MEDICAL claim for 10001
+  Then the response status should be 422 Unprocessable Entity
+  And the error message should contain ""Claim amount exceeds coverage limit""",US-02: Submit Insurance Claim,Critical,gherkin;claim;validation,Sprint 3
+Test,TC-08: Claim with inactive coverage,"Scenario: Claim for inactive coverage type
+  Given policy ""POL-AB123"" has VISION coverage with is_active = false
+  When I submit a VISION claim
+  Then the response status should be 422 Unprocessable Entity
+  And the error message should contain ""Coverage is not active""",US-02: Submit Insurance Claim,High,gherkin;claim;coverage,Sprint 3
+Test,TC-09: Claim submission with zero amount,"Scenario: Claim submission with zero amount
+  When I submit a claim with claimAmount = 0
+  Then the response status should be 400 Bad Request",US-02: Submit Insurance Claim,High,gherkin;claim;validation,Sprint 3
+Test,TC-10: Claim submission with short description,"Scenario: Claim submission with description too short
+  When I submit a claim with a 5-character description
+  Then the response status should be 400 Bad Request",US-02: Submit Insurance Claim,Medium,gherkin;claim;validation,Sprint 3
+Test,TC-11: Claim type not covered by policy,"Scenario: Claim type has no matching coverage on policy
+  Given policy ""POL-CD456"" has only MEDICAL and DENTAL coverages
+  When I submit a HOME claim against policy ""POL-CD456""
+  Then the response status should be 422 Unprocessable Entity
+  And the error message should contain ""Coverage type not found""",US-02: Submit Insurance Claim,High,gherkin;claim;coverage,Sprint 3
+Test,TC-12: Dupilcate claim within 24 hours,"Scenario: Duplicate claim within 24 hours is rejected
+  Given I submitted a MEDICAL claim for policy ""POL-AB123"" at T=0
+  When I submit another MEDICAL claim for policy ""POL-AB123"" at T+1 hour
+  Then the response status should be 409 Conflict
+  And the error message should indicate a duplicate submission",US-04: Duplicate Claim Prevention,High,gherkin;claim;duplicate,Sprint 4
+Test,TC-13: Claim after 24 hours allowed,"Scenario: Claim submitted 25 hours after previous is accepted
+  Given I submitted a MEDICAL claim for policy ""POL-AB123"" at T=0
+  When I submit another MEDICAL claim for policy ""POL-AB123"" at T+25 hours
+  Then the response status should be 201 Created",US-04: Duplicate Claim Prevention,High,gherkin;claim;duplicate,Sprint 4
+Test,TC-14: Different type not blocked,"Scenario: Different claim type is not subject to duplicate block
+  Given I submitted a MEDICAL claim for policy ""POL-AB123"" at T=0
+  When I submit a DENTAL claim for policy ""POL-AB123"" at T+1 hour
+  Then the response status should be 201 Created",US-04: Duplicate Claim Prevention,Medium,gherkin;claim;duplicate,Sprint 4
+Test,TC-15: Exact 24-hour boundary,"Scenario: Claim at exactly 24h boundary
+  Given I submitted a claim at T=0
+  When I submit the same type at T+24 hours exactly
+  Then the response status should be 409 Conflict",US-04: Duplicate Claim Prevention,High,gherkin;claim;boundary,Sprint 4
+Test,TC-16: View SUBMITTED claim status,"Scenario: Customer views a SUBMITTED claim status
+  Given claim 1 has status SUBMITTED
+  When I navigate to claim 1 status page
+  Then I see a blue SUBMITTED badge
+  And I see the claim type and amount",US-05: Track Claim Status,Medium,gherkin;status;frontend,Sprint 4
+Test,TC-17: View APPROVED claim status,"Scenario: Customer views an APPROVED claim status
+  Given claim 3 has status APPROVED
+  When I navigate to claim 3 status page
+  Then I see a green APPROVED badge",US-05: Track Claim Status,Medium,gherkin;status;frontend,Sprint 4
+Test,TC-18: View REJECTED claim status,"Scenario: Customer views a REJECTED claim status
+  Given claim 4 has status REJECTED
+  When I navigate to claim 4 status page
+  Then I see a red REJECTED badge",US-05: Track Claim Status,Medium,gherkin;status;frontend,Sprint 4
+Test,TC-19: Claim history shows all transitions,"Scenario: Claim history shows full status transition chain
+  Given claim 3 was: SUBMITTED then IN_REVIEW then APPROVED
+  When I navigate to claim 3 history page
+  Then I see 3 history entries
+  And the entries are sorted oldest to newest",US-06: View Claim History Timeline,Medium,gherkin;history;frontend,Sprint 5
+Test,TC-20: Reviewer notes visible in history,"Scenario: Reviewer notes are shown on admin actions
+  Given claim 3 has an APPROVED history entry with notes ""All documentation verified""
+  When I view claim 3 history
+  Then I see the reviewer notes on the APPROVED entry",US-06: View Claim History Timeline,Medium,gherkin;history;audit,Sprint 5
+Test,TC-21: Policy claims list shows all statuses,"Scenario: Policy claims list shows all claim statuses
+  Given policy ""POL-AB123"" has claims in SUBMITTED, IN_REVIEW, APPROVED, and REJECTED
+  When I navigate to the policy claims list
+  Then I see claims in all four statuses",US-07: List Claims for Policy,Medium,gherkin;policy;list,Sprint 5
+Test,TC-22: Admin can approve SUBMITTED claim,"Scenario: Admin approves a SUBMITTED claim
+  Given claim 1 has status SUBMITTED
+  When admin clicks Approve with notes ""Claim verified""
+  Then the claim status changes to APPROVED
+  And a new history entry with APPROVED is created",US-09: Approve Claim,Critical,gherkin;admin;approve,Sprint 6
+Test,TC-23: Admin can approve IN_REVIEW claim,"Scenario: Admin approves an IN_REVIEW claim
+  Given claim 2 has status IN_REVIEW
+  When admin clicks Approve
+  Then the claim status changes to APPROVED",US-09: Approve Claim,Critical,gherkin;admin;approve,Sprint 6
+Test,TC-24: Cannot approve already APPROVED claim,"Scenario: Double approval is prevented
+  Given claim 3 has status APPROVED
+  When admin attempts to approve claim 3 again
+  Then the response status should be 409 Conflict",US-09: Approve Claim,High,gherkin;admin;approve;validation,Sprint 6
+Test,TC-25: Admin can reject with notes,"Scenario: Admin rejects a claim with mandatory notes
+  Given claim 1 has status SUBMITTED
+  When admin clicks Reject with notes ""Pre-existing condition not covered""
+  Then the claim status changes to REJECTED
+  And a history entry is created with the rejection notes",US-10: Reject Claim,Critical,gherkin;admin;reject,Sprint 6
+Test,TC-26: Reject requires notes,"Scenario: Rejection without notes is rejected
+  Given claim 1 has status SUBMITTED
+  When admin clicks Reject without entering any notes
+  Then a validation error is shown on the notes field
+  And the API is not called",US-10: Reject Claim,High,gherkin;admin;reject;validation,Sprint 6
+Test,TC-27: Cannot reject already REJECTED claim,"Scenario: Double rejection is prevented
+  Given claim 4 has status REJECTED
+  When admin attempts to reject claim 4 again
+  Then the response status should be 409 Conflict",US-10: Reject Claim,High,gherkin;admin;reject;validation,Sprint 6
+Test,TC-28: Admin views audit trail,"Scenario: Admin views complete audit trail for claim 3
+  Given claim 3 has 3 history entries
+  When admin navigates to claim 3 detail page
+  Then all 3 history entries are displayed
+  And entries are sorted chronologically
+  And reviewer notes are visible on the APPROVED entry",US-11: Audit Trail Admin,Medium,gherkin;admin;audit,Sprint 7
+Test,TC-29: CUSTOMER cannot access admin route,"Scenario: Customer role cannot access admin pages
+  Given I am logged in as CUSTOMER
+  When I navigate to /admin/claims
+  Then I should be redirected to an Unauthorised page",US-13: Protected Route Navigation,High,gherkin;auth;routing,Sprint 1
+Test,TC-30: Unauthenticated redirect to login,"Scenario: Unauthenticated user is redirected
+  Given I am not logged in
+  When I navigate to /dashboard
+  Then I should be redirected to /login",US-13: Protected Route Navigation,High,gherkin;auth;routing,Sprint 1
