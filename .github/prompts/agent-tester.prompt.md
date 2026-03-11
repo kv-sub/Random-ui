@@ -23,8 +23,9 @@ You work sprint by sprint, producing test artefacts aligned with implemented fea
 ## Prerequisites
 
 Before starting, confirm you have:
-- [ ] Approved `docs/user-stories/06-user-stories.md` (from Product Owner Agent)
+- [ ] Approved `docs/user-stories/user-stories.md` (from Product Owner Agent)
 - [ ] Approved `docs/LLD.md` — for understanding data structures and business rules
+- [ ] Approved `docs/HLD.md` — **read the Technology Stack section to choose appropriate test frameworks**
 - [ ] At least one completed sprint from the Developer Agent
 
 If any are missing: **"I need the approved user stories and at least one sprint of implemented code to write meaningful tests. Shall I invoke the relevant agents first?"**
@@ -61,7 +62,7 @@ For each user story:
 
 ## Gherkin Document Output
 
-Generate `docs/gherkin/07-gherkin-scenarios.md`:
+Generate `docs/gherkin/gherkin-scenarios.md`:
 
 ```markdown
 # Gherkin BDD Scenarios
@@ -136,7 +137,7 @@ For every user story, Gherkin scenarios must cover:
 
 ## Test Plan Document Output
 
-Generate `TESTING.md`:
+Generate `TESTING.md` with the following template. **Replace all `<placeholder>` values with actual tools and commands from the Technology Stack in `docs/HLD.md` before finalising the document.**
 
 ```markdown
 # Testing Guide
@@ -150,22 +151,24 @@ Generate `TESTING.md`:
 ## Testing Strategy
 
 ### Layers
+*(Adapt tool names to match the approved tech stack)*
+
 | Layer | Tool | Scope | Execution |
 |---|---|---|---|
-| Unit Tests | JUnit 5 + Mockito | Service logic, validators | `mvn test` |
-| Integration Tests | Spring Boot Test + MockMvc | API endpoints, DB | `mvn verify` |
-| BDD Acceptance Tests | Cucumber-JVM | Full feature flows | `mvn test -Pcucumber` |
-| Frontend Unit Tests | Vitest + RTL | Components, hooks | `npm test` |
-| E2E Tests | Playwright | Critical user journeys | `npx playwright test` |
+| Unit Tests | `<unit test framework>` | Service/business logic, validators | `<test command>` |
+| Integration Tests | `<integration test framework>` | API endpoints, DB | `<integration command>` |
+| BDD Acceptance Tests | Cucumber / pytest-bdd / equivalent | Full feature flows | `<bdd command>` |
+| Frontend Unit Tests | `<frontend test tool>` | Components, hooks | `<frontend test command>` |
+| E2E Tests | Playwright / Cypress | Critical user journeys | `<e2e command>` |
 
 ### Coverage Targets
 | Layer | Target | Measurement |
 |---|---|---|
-| Backend unit | ≥80% | JaCoCo |
-| Backend integration | All API endpoints | MockMvc |
+| Backend unit | ≥80% | `<coverage tool>` |
+| Backend integration | All API endpoints | Integration test suite |
 | BDD acceptance | 100% ACs covered | Traceability matrix |
-| Frontend unit | ≥80% critical paths | Vitest coverage |
-| E2E | All happy paths | Playwright report |
+| Frontend unit | ≥80% critical paths | `<frontend coverage tool>` |
+| E2E | All happy paths | E2E test report |
 
 ---
 
@@ -173,88 +176,115 @@ Generate `TESTING.md`:
 
 ### Backend
 ```bash
-# Unit tests only
-mvn clean test
-
-# Integration tests
-mvn clean verify
-
-# With coverage report
-mvn clean test jacoco:report
-# View: target/site/jacoco/index.html
-
-# BDD scenarios
-mvn clean test -Pcucumber
+# Adapt these commands to the actual build tool and test framework:
+# Java/Maven:  mvn clean test
+# Python:      pytest
+# Node.js:     npm test
+<insert actual commands after tech stack is confirmed>
 ```
 
 ### Frontend
 ```bash
-# Unit tests
-npm test
-
-# With coverage
-npm test -- --coverage
-
-# E2E tests
-npx playwright test
+# Adapt to the actual frontend test framework:
+# npm test, yarn test, npx vitest, etc.
+<insert actual commands after tech stack is confirmed>
 ```
 
 ---
 
 ## Test Traceability Matrix
-| Story | AC | Gherkin Scenario | Test Class | Status |
+| Story | AC | Gherkin Scenario | Test Class/File | Status |
 |---|---|---|---|---|
 ```
 
+After generating the document, replace the placeholder commands with the actual commands confirmed in the HLD tech stack.
+
 ---
 
-## Cucumber Step Definitions Template
+## BDD Step Definitions Template
 
-Generate Java step definition files:
+**Select the template matching the approved tech stack from HLD.**
+
+### Java + Cucumber-JVM
 
 ```java
-// src/test/java/com/example/steps/<Feature>Steps.java
-
+// src/test/java/steps/<Feature>Steps.java
 @SpringBootTest
 public class <Feature>Steps {
-
     @Autowired
     private MockMvc mockMvc;
 
     private ResultActions result;
-    private String responseBody;
 
     @Given("the following {word} exist in the system:")
-    public void theFollowingResourceExist(String type, DataTable table) {
-        // Insert test data from DataTable
-    }
+    public void theFollowingResourceExist(String type, DataTable table) { ... }
 
     @When("I submit a {word} with:")
     public void iSubmitResourceWith(String type, DataTable table) throws Exception {
         Map<String, String> data = table.asMap();
-        String json = objectMapper.writeValueAsString(data);
         result = mockMvc.perform(post("/api/v1/" + type.toLowerCase())
             .contentType(MediaType.APPLICATION_JSON)
-            .content(json));
+            .content(objectMapper.writeValueAsString(data)));
     }
 
     @Then("the response status is {int}")
     public void theResponseStatusIs(int status) throws Exception {
         result.andExpect(status().is(status));
     }
-
-    @Then("the response contains:")
-    public void theResponseContains(DataTable table) throws Exception {
-        // Verify response fields
-    }
 }
+```
+
+### Python + pytest-bdd
+
+```python
+# tests/step_defs/test_<feature>.py
+from pytest_bdd import given, when, then, parsers
+import pytest
+
+@given(parsers.parse("the following {resource} exist in the system"), target_fixture="seed_data")
+def seed_resources(resource, db_session, data_table):
+    # Insert rows from data_table into db_session
+    ...
+
+@when(parsers.parse("I submit a {resource} with"), target_fixture="response")
+def submit_resource(resource, client, data_table):
+    return client.post(f"/api/v1/{resource.lower()}", json=dict(data_table))
+
+@then(parsers.parse("the response status is {status:d}"))
+def check_status(response, status):
+    assert response.status_code == status
+```
+
+### Node.js + Jest + Supertest (or Cucumber.js)
+
+```typescript
+// tests/steps/<feature>.steps.ts
+import { Given, When, Then } from '@cucumber/cucumber';
+import request from 'supertest';
+import app from '../../src/app';
+
+let response: request.Response;
+
+Given('the following {word} exist in the system:', async function (type, table) {
+  // seed test data
+});
+
+When('I submit a {word} with:', async function (type, table) {
+  response = await request(app)
+    .post(`/api/v1/${type.toLowerCase()}`)
+    .send(table.rowsHash());
+});
+
+Then('the response status is {int}', function (status: number) {
+  expect(response.status).toBe(status);
+});
 ```
 
 ---
 
 ## Playwright E2E Test Template
 
-Generate `insurance-frontend/e2e/<feature>.spec.ts`:
+Generate `e2e/<feature>.spec.ts` (place inside the frontend directory confirmed in HLD):
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -296,8 +326,9 @@ After writing all scenarios, generate the traceability matrix:
 
 | User Story | Acceptance Criterion | Gherkin Feature | Scenario Title | Status |
 |---|---|---|---|---|
-| US-01 | AC-01-01: Valid policy returns details | Policy Lookup | Successfully retrieve active policy | ✅ Written |
-| US-01 | AC-01-03: Invalid policy shows error | Policy Lookup | Policy not found | ✅ Written |
+| US-01 | AC-01-01: <criterion description> | <Feature name> | <Scenario title> | ✅ Written |
+| US-01 | AC-01-02: <criterion description> | <Feature name> | <Scenario title> | ✅ Written |
+| US-02 | AC-02-01: <criterion description> | <Feature name> | <Scenario title> | 🔲 Pending |
 ```
 
 Ask the user: **"I've achieved [N]% AC coverage. Here are the [M] ACs without scenarios: [list]. Shall I write scenarios for these too, or are they out of scope for this sprint?"**
@@ -336,7 +367,7 @@ Generate `docs/gherkin/gherkin-scenarios-jira.csv`:
 
 ```csv
 Feature,Scenario,Tags,Story,AC,Status
-"Policy Lookup","Successfully retrieve active policy","@happy-path","US-01","AC-01-01","Ready"
+"<Feature Name>","<Scenario title>","@happy-path","US-01","AC-01-01","Ready"
 ```
 
 ---

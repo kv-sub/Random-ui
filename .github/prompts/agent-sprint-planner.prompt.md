@@ -23,7 +23,7 @@ You produce living sprint plan documents, updated at the end of every sprint ret
 ## Prerequisites
 
 Before starting, confirm you have:
-- [ ] Approved `docs/user-stories/06-user-stories.md` (from Product Owner Agent)
+- [ ] Approved `docs/user-stories/user-stories.md` (from Product Owner Agent)
 - [ ] Approved `docs/LLD.md` (from System Designer Agent)
 - [ ] Team composition (number of engineers, QA, roles)
 - [ ] Sprint duration (default: 2 weeks)
@@ -65,7 +65,7 @@ Before generating the sprint plan, ask the user:
 
 ## Sprint Plan Document Output
 
-Generate `docs/sprint-plan/09-sprint-plan.md`:
+Generate `docs/sprint-plan/sprint-plan.md`:
 
 ```markdown
 # Sprint Plan
@@ -146,13 +146,14 @@ Generate `docs/sprint-plan/09-sprint-plan.md`:
 When assigning stories to sprints:
 
 1. **Sprint 1 must always contain:**
-   - Project setup (CI/CD, Docker, database)
-   - Authentication and navigation (foundation for all other features)
-   - Core data model setup
+   - Project scaffolding and repository setup (build tooling, dependency management, CI skeleton)
+   - Core infrastructure setup (database migrations, Docker baseline, environment config)
+   - The highest-priority MVP stories that unblock all other work (determined from the approved backlog)
 
 2. **Dependencies must be respected:**
+   - Infrastructure and data models before business logic
    - Backend APIs before frontend integration
-   - Authentication before any protected features
+   - Any gating story (auth, core resource creation) before features that depend on it
    - Database schema before any data operations
 
 3. **Capacity rule:** Never exceed 90% of available capacity per sprint (leave buffer for bugs/rework).
@@ -187,11 +188,11 @@ gantt
     excludes weekends
 
     section Sprint 1
-    Project Setup           :done, sp1a, 2026-01-05, 3d
-    US-12 Authentication    :done, sp1b, 2026-01-08, 4d
+    Project Setup & Infrastructure  :done, sp1a, 2026-01-05, 3d
+    US-01 <Core Foundation Story>   :done, sp1b, 2026-01-08, 4d
 
     section Sprint 2
-    US-01 Feature A         :active, sp2a, 2026-01-19, 5d
+    US-02 <Feature A>               :active, sp2a, 2026-01-19, 5d
 ```
 
 ---

@@ -25,7 +25,7 @@ Before starting, confirm you have the following from the Architect Agent:
 - [ ] Approved `docs/HLD.md`
 - [ ] Approved `docs/architecture/01-architecture-diagram.md`
 - [ ] Approved `docs/architecture/02-service-decomposition.md`
-- [ ] Technology stack confirmed
+- [ ] Technology stack confirmed (from HLD — this drives all template choices below)
 
 If any are missing, ask: **"I need the approved HLD and architecture documents before I can produce the LLD. Shall I invoke the Architect Agent first?"**
 
@@ -47,7 +47,7 @@ If any are missing, ask: **"I need the approved HLD and architecture documents b
 
 ## Document Output: Low-Level Design (LLD)
 
-Generate `docs/LLD.md` with the following structure:
+Generate `docs/LLD.md` with the following structure. Adapt section names to match the chosen technology stack (e.g., if the backend is Python/FastAPI, replace "Class Design — Repositories" with "Data Access Layer"):
 
 ```markdown
 # Low Level Design (LLD)
@@ -87,28 +87,28 @@ Generate `docs/LLD.md` with the following structure:
 
 ## Class Design Template
 
-For every class/interface, document:
+For every class/interface/module, document:
 
 ```markdown
-### `ClassName`
+### `ClassName` / `module_name`
 
-**Package:** `com.example.module.subpackage`
-**Type:** Entity | DTO | Service | Repository | Controller | Validator
-**Description:** <what this class does>
+**Package/Module:** `<namespace or path>`
+**Type:** Entity/Model | DTO/Schema | Service | Repository/DAO | Controller/Route | Validator | Middleware
+**Description:** <what this class or module does>
 
-#### Fields
+#### Fields / Properties
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| fieldName | String | @NotBlank, max=50 | Description |
+| fieldName | String | required, max=50 | Description |
 
-#### Methods
+#### Methods / Functions
 | Method | Signature | Description |
 |---|---|---|
 | methodName | `ReturnType method(Param1 p1)` | Description |
 
-#### JPA Annotations (if entity)
-- Table name, indexes, constraints
-- Relationships (OneToMany, ManyToOne, etc.)
+#### Persistence Annotations (if applicable to the chosen ORM)
+- Table/collection name, indexes, constraints
+- Relationships (e.g., OneToMany, ForeignKey, @relation, etc.)
 ```
 
 ---
@@ -179,7 +179,7 @@ Also generate `docs/data-model/04-database-model.md` with:
 
 ## API Contract Template
 
-Generate `docs/api/05-openapi.yaml`:
+Generate `docs/api/openapi.yaml`:
 
 ```yaml
 openapi: 3.0.3
@@ -273,16 +273,17 @@ sequenceDiagram
 
 ## State Machine Template
 
-For every entity with a lifecycle:
+For every entity with a lifecycle, adapt the states to the domain (examples below are generic — replace with actual domain states):
 
 ```mermaid
 stateDiagram-v2
-    [*] --> SUBMITTED: Create
-    SUBMITTED --> IN_REVIEW: Review starts
-    IN_REVIEW --> APPROVED: Reviewer approves
-    IN_REVIEW --> REJECTED: Reviewer rejects
-    APPROVED --> [*]
-    REJECTED --> [*]
+    [*] --> CREATED: Initial creation
+    CREATED --> PROCESSING: Work begins
+    PROCESSING --> COMPLETED: Successfully finished
+    PROCESSING --> FAILED: Error occurred
+    COMPLETED --> [*]
+    FAILED --> PROCESSING: Retry
+    FAILED --> [*]
 ```
 
 ---
@@ -303,8 +304,10 @@ For every business rule, document:
 
 | Rule ID | Rule | Enforced In | Error if Violated |
 |---|---|---|---|
-| BR-001 | Amount must not exceed coverage limit | ClaimService | CoverageExceededException |
-| BR-002 | Incident date cannot be in the future | IncidentDateValidator | ValidationException |
+| BR-001 | `<describe the rule>` | `<service/validator name>` | `<exception or error type>` |
+| BR-002 | `<describe the rule>` | `<service/validator name>` | `<exception or error type>` |
+
+Derive all rules directly from the Acceptance Criteria in the user stories document.
 
 ---
 

@@ -22,7 +22,7 @@ You engage the user interactively at key decision points and version all documen
 ## Prerequisites
 
 Before starting, confirm you have the following from the Product Owner Agent:
-- [ ] Approved `docs/user-stories/06-user-stories.md`
+- [ ] Approved `docs/user-stories/user-stories.md`
 - [ ] List of user roles and their access levels
 - [ ] Key business workflows
 - [ ] Non-functional requirements (NFRs)
@@ -168,19 +168,51 @@ Generate `docs/architecture/02-service-decomposition.md`:
 
 ---
 
-## Technology Stack Template
+## Technology Stack Decision Framework
 
-For each layer, document:
+**Do not pre-fill the technology stack.** Instead, present options and let the user choose. For each layer, present a decision using this format (replace bracketed text with actual options and justifications):
+
+> "For the **[frontend/backend/database/etc.]** layer, I recommend **[Option A]** because **[specific reason based on requirements]**. Alternatives are [Option B] ([trade-off]), [Option C] ([trade-off]). Which would you prefer?"
+
+Only populate the table after the user confirms each choice:
 
 | Layer | Technology | Version | Justification |
 |---|---|---|---|
-| Frontend | React + TypeScript | 19 | Component model, type safety |
-| Backend | Spring Boot | 3.x | Production-grade Java framework |
-| Database | PostgreSQL | 16 | ACID, relational, JSON support |
-| ORM | Hibernate / JPA | 3.x | Standard Java persistence |
-| Build | Maven / Gradle | latest | Dependency management |
+| Frontend | `<decided with user>` | `<version>` | `<reason>` |
+| Backend | `<decided with user>` | `<version>` | `<reason>` |
+| Database | `<decided with user>` | `<version>` | `<reason>` |
+| ORM / ODM | `<decided with user>` | `<version>` | `<reason>` |
+| Build tool | `<decided with user>` | `<version>` | `<reason>` |
 | Container | Docker | latest | Reproducible environments |
 | CI/CD | GitHub Actions | — | Native SCM integration |
+
+### Common Technology Options by Layer
+
+**Backend:**
+- Java + Spring Boot 3.x — Production-grade, strong ecosystem, JPA/Hibernate, OpenAPI
+- Python + FastAPI — Rapid development, async support, strong for ML/data workloads
+- Node.js + Express/NestJS — JavaScript full-stack, real-time capability, large ecosystem
+- Go + Gin/Echo — High performance, low memory footprint, strong concurrency
+
+**Frontend:**
+- React + TypeScript + Vite — Component model, large ecosystem, type safety
+- Vue.js + TypeScript — Gentle learning curve, opinionated structure
+- Angular — Enterprise full framework, strong typing, built-in DI
+- Next.js — React SSR/SSG, built-in routing, SEO-friendly
+- Plain HTML/CSS/JS — Minimal complexity projects, no SPA needed
+
+**Database:**
+- PostgreSQL — ACID, relational, JSON support, scalable
+- MySQL / MariaDB — ACID, relational, widely supported
+- MongoDB — Document store, flexible schema, JSON-native
+- SQLite — Embedded, zero-config, good for small/local apps
+- Redis — In-memory, key-value, caching and session storage
+
+**ORM / Data Access:**
+- Hibernate / JPA (Java) — Standard Java persistence, powerful query DSL
+- SQLAlchemy (Python) — Full ORM with Core and ORM layers
+- TypeORM / Prisma (Node.js/TypeScript) — Type-safe DB access
+- GORM (Go) — Full-featured ORM for Go
 
 ---
 

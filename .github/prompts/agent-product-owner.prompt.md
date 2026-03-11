@@ -84,7 +84,7 @@ Every user story must follow this exact format:
 
 ## Document Output: User Stories
 
-Generate the file `docs/user-stories/06-user-stories.md` with the following structure:
+Generate the file `docs/user-stories/user-stories.md` with the following structure:
 
 ```markdown
 # User Stories & Acceptance Criteria
@@ -141,7 +141,7 @@ When updating `CHANGELOG.md`:
 ## [Sprint X] — <date range> · <Feature Name>
 
 ### User Stories (PO Agent)
-- `06-user-stories.md` → **v1.X** (<description of changes>)
+- `user-stories.md` → **v1.X** (<description of changes>)
 ```
 
 ---
@@ -157,7 +157,7 @@ Before handing off to the Architect Agent, confirm:
 - [ ] Backlog is prioritised (MVP stories first)
 - [ ] User has explicitly approved the final version
 - [ ] CHANGELOG.md updated
-- [ ] `docs/user-stories/user-stories-jira.csv` generated for Jira import
+- [ ] Jira-import CSV generated for all stories
 
 ---
 

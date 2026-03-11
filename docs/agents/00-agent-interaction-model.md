@@ -1,7 +1,7 @@
 # Agent Interaction Model
-## Agile SDLC Custom Agents — Insurance Claim Submission System
+## Agile SDLC Custom Agents — General Purpose
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** March 2026  
 **Status:** Active
 
@@ -11,20 +11,21 @@
 
 | Version | Date | Changes |
 |---|---|---|
-| 1.0 | 2026-03-11 | Initial agent interaction model — 7 agents defined, SDLC workflow mapped |
+| 1.0 | 2026-03-11 | Initial agent interaction model — 8 agents defined, SDLC workflow mapped |
+| 1.1 | 2026-03-11 | Agents made project-agnostic; technology choices are runtime decisions, not pre-filled defaults |
 
 ---
 
 ## 1. Overview
 
-This document describes the **role-based custom agent system** built to support and replicate the full agile Software Development Lifecycle (SDLC) for the Insurance Claim Submission System — and for any future projects developed in this repository.
+This document describes the **role-based custom agent system** — a structured, interactive, multi-agent framework for the full agile Software Development Lifecycle (SDLC). The agents are **project-agnostic**: they work for any software project, any technology stack, and any domain.
 
-The system was originally built using 3 manual prompts. This agent system **reverse engineers** that development process and provides a structured, interactive, multi-agent framework that can:
+The agents were initially created by reverse-engineering the development of the Insurance Claim Submission System (which was built using 3 monolithic prompts). They are now generalised so you can use them to:
 
-- Produce all SDLC artefacts from scratch
-- Interact with the user at every decision point
-- Version all documents automatically
-- Be re-run to rebuild the project from the ground up
+- Build any new project from scratch by starting with the Orchestrator Agent
+- Re-develop the Insurance Claim Submission System from scratch using the existing `docs/` as the source of truth
+- Adapt to any change request by re-running only the affected agents and all downstream agents
+- Produce all SDLC artefacts (requirements, architecture, design, sprint plan, code, tests, DevOps) interactively with version-controlled documents
 
 ---
 
@@ -137,7 +138,7 @@ Each agent produces documents that downstream agents **depend on**. The followin
 ```mermaid
 graph LR
     subgraph PO_Out["Product Owner Output"]
-        US["docs/user-stories/\n06-user-stories.md"]
+        US["docs/user-stories/\nuser-stories.md"]
     end
 
     subgraph AR_Out["Architect Output"]
@@ -147,12 +148,12 @@ graph LR
 
     subgraph SD_Out["System Designer Output"]
         LLD["docs/LLD.md"]
-        DM["docs/data-model/\n03-er-diagram.md\n04-database-model.md"]
-        API["docs/api/\n05-openapi.yaml"]
+        DM["docs/data-model/\ner-diagram.md\ndatabase-model.md"]
+        API["docs/api/\nopenapi.yaml"]
     end
 
     subgraph SP_Out["Sprint Planner Output"]
-        SPRINT["docs/sprint-plan/\n09-sprint-plan.md"]
+        SPRINT["docs/sprint-plan/\nsprint-plan.md"]
     end
 
     subgraph DEV_Out["Developer Output"]
@@ -161,7 +162,7 @@ graph LR
     end
 
     subgraph TEST_Out["Tester Output"]
-        GHERKIN["docs/gherkin/\n07-gherkin-scenarios.md"]
+        GHERKIN["docs/gherkin/\ngherkin-scenarios.md"]
         TESTING["TESTING.md"]
     end
 
@@ -222,29 +223,54 @@ Every document must include a **Document History** table:
 
 ## 7. Re-development Capability
 
-To rebuild the project from scratch using the agent system:
+The agents are **document-driven**. As long as the docs in `docs/` are up-to-date and approved, the Developer Agent can rebuild the entire system from them — for this project or any future project.
+
+### Re-creating the Insurance Claim Submission System from scratch
+
+All the approved SDLC documents for this project already exist in `docs/`. To rebuild the implementation from scratch:
 
 ```
 Step 1: @orchestrator Re-develop project: Insurance Claim Submission System
-Step 2: Orchestrator confirms all documents are up-to-date
-Step 3: @developer Implement Sprint 1 (from scratch)
-Step 4: Continue sprint by sprint
-Step 5: @tester Validate each sprint against acceptance criteria
+        (Orchestrator reviews docs/ and confirms they are current)
+
+Step 2: @developer Implement Sprint 1
+        (Reference: docs/HLD.md, docs/LLD.md, docs/sprint-plan/sprint-plan.md,
+                    docs/user-stories/user-stories.md, docs/api/openapi.yaml)
+
+Step 3: @tester Write Gherkin scenarios for Sprint 1 stories
+        (Reference: docs/user-stories/user-stories.md, docs/LLD.md)
+
+Step 4: Continue sprint by sprint — @developer then @tester for each sprint
+
+Step 5: @devops Set up Docker and CI/CD
+        (Reference: docs/HLD.md — tech stack and deployment sections)
 ```
 
-**Key principle:** The agents are document-driven. As long as the docs in `docs/` are up-to-date and approved, the Developer Agent can rebuild the entire system from them.
+### Starting a brand-new project
+
+```
+@orchestrator Start a new project: <describe your project in 2-3 sentences>
+```
+
+The Orchestrator starts with a blank slate — no existing docs are assumed. It will guide you through all phases interactively.
 
 ---
 
 ## 8. How the Original 3 Prompts Map to Agents
 
+This agent system was reverse-engineered from 3 monolithic prompts used to build the Insurance Claim Submission System. Each prompt has been decomposed into the relevant specialist agents:
+
 | Original Prompt | Agent Equivalent | Phase |
 |---|---|---|
-| `instructions-insuranceClaimSubmissionSystem.prompt.md` | Developer Agent + DevOps Agent | Phase 5, 7 |
 | `plan-insuranceClaimSubmissionSystem.prompt.md` | Product Owner + Architect + System Designer + Sprint Planner | Phases 1–4 |
+| `instructions-insuranceClaimSubmissionSystem.prompt.md` | Developer Agent + DevOps Agent | Phase 5, 7 |
 | `plan-testingAndCoverage.prompt.md` | Tester Agent + DevOps Agent | Phase 6, 7 |
 
-The agent system **expands** these 3 prompts into a full interactive, multi-agent SDLC framework where each role is clearly separated, documents are versioned, and the user is consulted at every major decision.
+The agent system **expands** these 3 prompts into a full interactive, multi-agent SDLC framework where:
+- Each role is clearly separated with defined inputs and outputs
+- Documents are versioned and user-approved at every phase
+- Technology choices are made interactively (not pre-wired to a specific stack)
+- The same agents can drive any project, not just this one
 
 ---
 

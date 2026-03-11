@@ -21,9 +21,10 @@ You are the **DevOps Agent** in the agile SDLC. You design and implement the inf
 ## Prerequisites
 
 Before starting, confirm you have:
-- [ ] Approved `docs/HLD.md` — deployment architecture section
+- [ ] Approved `docs/HLD.md` — deployment architecture section and **Technology Stack** (drives Dockerfile choices)
 - [ ] Approved `docs/LLD.md` — tech stack and service list
-- [ ] Approved `docs/sprint-plan/09-sprint-plan.md` — know which sprints include DevOps tasks
+- [ ] Approved `docs/sprint-plan/sprint-plan.md` — know which sprints include DevOps tasks
+- [ ] List of services (from HLD service decomposition) and their source directories
 - [ ] List of environments required (dev, test, prod, etc.)
 
 ---
@@ -41,80 +42,100 @@ Before starting, confirm you have:
 
 ---
 
-## Dockerfile Template (Spring Boot)
+## Dockerfile Templates
 
-Generate `insurance-claim-system/Dockerfile`:
+**Read `docs/HLD.md` Technology Stack section before choosing a template. Adapt to the actual language and framework in use.**
+
+### Java + Spring Boot (Maven)
+
+Generate `<backend-service-dir>/Dockerfile`:
 
 ```dockerfile
 # syntax=docker/dockerfile:1
-
-# ─── Build Stage ────────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jdk-alpine AS build
-
 WORKDIR /app
-
-# Copy dependency manifests first for better layer caching
 COPY pom.xml .
 COPY .mvn/ .mvn/
 COPY mvnw .
-
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
-
-# Copy source and build
 COPY src/ src/
 RUN ./mvnw -B clean package -DskipTests
 
-# ─── Runtime Stage ───────────────────────────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine AS runtime
-
-# Non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-
 RUN chown appuser:appgroup app.jar
 USER appuser
-
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget -qO- http://localhost:8080/actuator/health || exit 1
-
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
----
+### Python + FastAPI (or Django/Flask)
 
-## Dockerfile Template (React Frontend)
-
-Generate `insurance-frontend/Dockerfile`:
+Generate `<backend-service-dir>/Dockerfile`:
 
 ```dockerfile
 # syntax=docker/dockerfile:1
+FROM python:3.12-slim AS runtime
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY --chown=appuser:appgroup . .
+USER appuser
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
 
-# ─── Build Stage ─────────────────────────────────────────────────────────────────
+### Node.js + Express / NestJS
+
+Generate `<backend-service-dir>/Dockerfile`:
+
+```dockerfile
+# syntax=docker/dockerfile:1
 FROM node:20-alpine AS build
-
 WORKDIR /app
 COPY package*.json .
 RUN npm ci --frozen-lockfile
-
 COPY . .
 RUN npm run build
 
-# ─── Runtime Stage ───────────────────────────────────────────────────────────────
-FROM nginx:alpine AS runtime
-
+FROM node:20-alpine AS runtime
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY package*.json .
+USER appuser
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:3000/health || exit 1
+CMD ["node", "dist/main.js"]
+```
 
+### React / Vue / Angular Frontend (nginx)
+
+Generate `<frontend-service-dir>/Dockerfile`:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json .
+RUN npm ci --frozen-lockfile
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine AS runtime
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
 RUN chown -R appuser:appgroup /usr/share/nginx/html
-
 EXPOSE 80
-
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost/ || exit 1
 ```
 
@@ -122,126 +143,115 @@ HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost/ || exit 
 
 ## Docker Compose Templates
 
-### Development Profile (`docker-compose.yml`)
+Adapt service names, directories, ports, and environment variables to match the project's actual service names and tech stack from HLD.
+
+### Base Compose File (`docker-compose.yml`)
 
 ```yaml
 # docker-compose.yml — base configuration
+# Replace <project>, <service-dir>, <db-image>, port numbers, etc. with actuals from HLD
+
 services:
   db:
-    image: postgres:16-alpine
+    image: ${DB_IMAGE:-postgres:16-alpine}           # or mysql, mongo, etc. per HLD
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-claimsdb}
-      POSTGRES_USER: ${POSTGRES_USER:-claimsuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claimspass}
+      POSTGRES_DB:       ${DB_NAME:-appdb}
+      POSTGRES_USER:     ${DB_USER:-appuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./insurance-claim-system/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - db_data:/var/lib/postgresql/data
+      - ./<backend-service-dir>/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-claimsuser}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-appuser}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  app:
+  backend:
     build:
-      context: ./insurance-claim-system
+      context: ./<backend-service-dir>
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-claimsdb}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-claimsuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-claimspass}
+      DB_URL:      ${DB_URL:-jdbc:postgresql://db:5432/${DB_NAME:-appdb}}
+      DB_USER:     ${DB_USER:-appuser}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:${BACKEND_PORT:-8080}/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-volumes:
-  postgres_data:
-```
-
-### Test Profile (with synthetic agent)
-
-```yaml
-# docker-compose.test.yml — extends base, adds test-only services
-services:
-  synthetic-agent:
-    profiles: [test]
+  frontend:                                           # remove if project has no frontend
     build:
-      context: ./synthetic-agent
+      context: ./<frontend-service-dir>
       dockerfile: Dockerfile
     ports:
-      - "8501:8501"
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-claimsdb}
-      DB_USER: ${POSTGRES_USER:-claimsuser}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-claimspass}
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      db:
-        condition: service_healthy
+      - backend
+
+volumes:
+  db_data:
 ```
 
-### Production Profile
+### Production Overrides (`docker-compose.prod.yml`)
 
 ```yaml
-# docker-compose.prod.yml — production overrides
 services:
-  app:
-    image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-app:${VERSION:-latest}
+  backend:
+    image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-backend:${VERSION:-latest}
     restart: always
-    deploy:
-      replicas: 2
-      resources:
-        limits:
-          memory: 512M
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: ${PROD_DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${PROD_DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${PROD_DB_PASSWORD}
+      APP_ENV: production
+      DB_URL:      ${PROD_DB_URL}
+      DB_USER:     ${PROD_DB_USER}
+      DB_PASSWORD: ${PROD_DB_PASSWORD}
+  frontend:
+    image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${VERSION:-latest}
+    restart: always
 ```
 
 ---
 
 ## Environment Files
 
-Generate template `.env` files:
+Generate `.env.example` (committed) with placeholders — never commit real secrets.
 
-### `.env.example` (committed)
 ```
-# Database
-POSTGRES_DB=claimsdb
-POSTGRES_USER=claimsuser
-POSTGRES_PASSWORD=changeme
+# ─── Database ─────────────────────────────────────────────────────────
+DB_IMAGE=postgres:16-alpine        # change to mysql:8, mongo:7, etc. if needed
+DB_NAME=appdb
+DB_USER=appuser
+DB_PASSWORD=changeme
 
-# Application
-SPRING_PROFILES_ACTIVE=dev
+# ─── Backend ──────────────────────────────────────────────────────────
+BACKEND_PORT=8080
+APP_ENV=development
 
-# Frontend
-VITE_API_BASE_URL=http://localhost:8080/api/v1
+# ─── Frontend ─────────────────────────────────────────────────────────
+FRONTEND_PORT=3000
+API_BASE_URL=http://localhost:8080/api/v1   # adjust path to match actual API prefix
+
+# ─── Docker registry (for prod push) ──────────────────────────────────
+DOCKER_REGISTRY=ghcr.io/<org>
+PROJECT_NAME=<project-slug>
+VERSION=latest
 ```
 
-### `.env.test` (committed, test values)
-```
-POSTGRES_DB=claimsdb_test
-POSTGRES_USER=testuser
-POSTGRES_PASSWORD=testpass
-SPRING_PROFILES_ACTIVE=test
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-```
+Generate `.env.test` with safe test-environment values (may be committed).
 
 ---
 
 ## GitHub Actions CI/CD Pipeline
+
+> **Before generating the CI file:** Read the Technology Stack in `docs/HLD.md`. Keep only the language block(s) that match the project's actual backend and frontend. Delete the unused blocks entirely — do not leave them with conditions referencing undefined variables. Replace all `<placeholder>` directory names with the real service directory names.
 
 Generate `.github/workflows/ci.yml`:
 
@@ -255,12 +265,15 @@ on:
     branches: [main, develop]
 
 jobs:
+  # ── Backend job ──────────────────────────────────────────────────────
+  # Keep ONE of the three language variants below; delete the others.
   backend:
     name: Backend — Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # ── VARIANT A: Java / Spring Boot (Maven) ─────────────────────────
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -268,82 +281,83 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and test with JaCoCo
-        working-directory: ./insurance-claim-system
+      - name: Build and test (Maven + JaCoCo)
+        working-directory: ./<backend-service-dir>
         run: mvn -B clean verify jacoco:report
+      # ── END VARIANT A ─────────────────────────────────────────────────
 
-      - name: Check coverage threshold (≥80%)
-        working-directory: ./insurance-claim-system
-        run: |
-          COVERAGE=$(python3 -c "
-          import xml.etree.ElementTree as ET
-          tree = ET.parse('target/site/jacoco/jacoco.xml')
-          root = tree.getroot()
-          for counter in root.findall('counter'):
-              if counter.get('type') == 'INSTRUCTION':
-                  missed = int(counter.get('missed'))
-                  covered = int(counter.get('covered'))
-                  pct = covered / (missed + covered) * 100
-                  print(f'{pct:.1f}')
-                  break
-          ")
-          echo "Coverage: ${COVERAGE}%"
-          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
-            echo "❌ Coverage ${COVERAGE}% is below the 80% threshold"
-            exit 1
-          fi
-          echo "✅ Coverage ${COVERAGE}% meets threshold"
+      # ── VARIANT B: Python / FastAPI (pytest) ──────────────────────────
+      # - name: Set up Python 3.12
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: '3.12'
+      #
+      # - name: Install and test (pytest)
+      #   working-directory: ./<backend-service-dir>
+      #   run: |
+      #     pip install -r requirements.txt
+      #     pytest --cov=app --cov-report=xml --cov-fail-under=80
+      # ── END VARIANT B ─────────────────────────────────────────────────
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: jacoco-report
-          path: insurance-claim-system/target/site/jacoco/
+      # ── VARIANT C: Node.js / Express / NestJS (Jest) ──────────────────
+      # - name: Set up Node.js 20
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      #     cache: npm
+      #     cache-dependency-path: <backend-service-dir>/package-lock.json
+      #
+      # - name: Install and test (Jest)
+      #   working-directory: ./<backend-service-dir>
+      #   run: |
+      #     npm ci
+      #     npm test -- --coverage --coverageThreshold='{"global":{"lines":80}}'
+      # ── END VARIANT C ─────────────────────────────────────────────────
 
+  # ── Frontend job (remove entirely if project has no frontend) ────────
   frontend:
     name: Frontend — Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: insurance-frontend/package-lock.json
+          cache-dependency-path: <frontend-service-dir>/package-lock.json
 
-      - name: Install dependencies
-        working-directory: ./insurance-frontend
+      - name: Install
+        working-directory: ./<frontend-service-dir>
         run: npm ci
 
-      - name: Run tests with coverage
-        working-directory: ./insurance-frontend
+      - name: Test with coverage
+        working-directory: ./<frontend-service-dir>
         run: npm test -- --coverage --run
 
       - name: Build
-        working-directory: ./insurance-frontend
+        working-directory: ./<frontend-service-dir>
         run: npm run build
 
+  # ── Docker build validation ──────────────────────────────────────────
   docker:
     name: Docker — Build Validation
     runs-on: ubuntu-latest
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
-
       - name: Build backend image
-        run: docker build -t app-test ./insurance-claim-system
-
+        run: docker build -t backend-test ./<backend-service-dir>
       - name: Build frontend image
-        run: docker build -t frontend-test ./insurance-frontend
+        # Remove if no frontend
+        run: docker build -t frontend-test ./<frontend-service-dir>
 ```
 
 ---
 
-## Coverage Report Server
+## Coverage Report Server (Optional)
 
-Generate `insurance-claim-system/serve-jacoco.js`:
+For Java/JaCoCo projects, generate `<backend-service-dir>/serve-jacoco.js`:
 
 ```javascript
 // Simple Node.js server to view JaCoCo HTML reports in Codespace
@@ -375,7 +389,7 @@ http.createServer((req, res) => {
   });
 }).listen(PORT, () => {
   console.log(`JaCoCo report server running at http://localhost:${PORT}`);
-  console.log('Generate report first: cd insurance-claim-system && mvn clean test jacoco:report');
+  console.log('Generate report first: cd <backend-service-dir> && mvn clean test jacoco:report');
 });
 ```
 
@@ -383,15 +397,14 @@ http.createServer((req, res) => {
 
 ## README Template
 
-Update `README.md` with:
+Update `README.md` with sections adapted to the actual project structure:
 
 ```markdown
 ## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
-- Java 21+ (for local dev)
-- Node.js 20+ (for frontend dev)
+- <Language runtime> <version>+ (for local dev without Docker)
 
 ### Run with Docker Compose
 ```bash
@@ -399,21 +412,18 @@ Update `README.md` with:
 cp .env.example .env
 docker compose up --build
 
-# With synthetic data agent (test profile)
-docker compose --env-file .env.test --profile test up --build
-
 # Production
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ### Local Development
 ```bash
-# Backend
-cd insurance-claim-system
-mvn spring-boot:run
+# Backend (adapt command to the actual build tool)
+cd <backend-service-dir>
+<start command>        # e.g.: mvn spring-boot:run | uvicorn app.main:app | npm run dev
 
-# Frontend
-cd insurance-frontend
+# Frontend (if project has a frontend)
+cd <frontend-service-dir>
 npm install && npm run dev
 ```
 

@@ -1,14 +1,14 @@
 # Agent System — Usage Guide
 ## Role-Based Custom Agents for Agile SDLC
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** March 2026
 
 ---
 
 ## What Are These Agents?
 
-This repository includes a set of **role-based custom agents** defined as `.prompt.md` files in `.github/prompts/`. Each agent represents a specialised role in the agile Software Development Lifecycle (SDLC):
+This repository includes a set of **project-agnostic, role-based custom agents** defined as `.prompt.md` files in `.github/prompts/`. Each agent represents a specialised role in the agile Software Development Lifecycle (SDLC) and works for **any software project and any technology stack**.
 
 | Agent | Role | When to Use |
 |---|---|---|
@@ -21,11 +21,54 @@ This repository includes a set of **role-based custom agents** defined as `.prom
 | 🧪 Tester | Gherkin tests & QA | Phase 6: Test the system |
 | 🚀 DevOps | Docker & CI/CD | Phase 7: Deploy the system |
 
+**Technology stack is never pre-assumed.** The Architect Agent presents options and the user chooses. All downstream agents (Developer, Tester, DevOps) adapt their templates to the chosen stack.
+
 ---
 
-## Quick Start
+## Rebuilding the Insurance Claim Submission System From Scratch
 
-### Starting a New Project
+The SDLC documents for the Insurance Claim Submission System already exist in `docs/`. You can use the Developer Agent to rebuild the entire implementation from scratch:
+
+### Step 1: Start the Developer Agent for Sprint 1
+
+```
+@workspace #file:.github/prompts/agent-developer.prompt.md
+
+Re-develop from scratch starting from Sprint 1.
+
+Use these approved documents:
+- docs/HLD.md (architecture + tech stack)
+- docs/LLD.md (detailed design + DDL)
+- docs/sprint-plan/sprint-plan.md (sprint tasks)
+- docs/user-stories/user-stories.md (acceptance criteria)
+- docs/api/openapi.yaml (API contract)
+```
+
+### Step 2: Validate Sprint 1 with the Tester Agent
+
+```
+@workspace #file:.github/prompts/agent-tester.prompt.md
+
+Write Gherkin scenarios and step definitions for Sprint 1 stories.
+Reference: docs/user-stories/user-stories.md and docs/LLD.md
+```
+
+### Step 3: Continue Sprint by Sprint
+
+Repeat Step 1 and Step 2 for each sprint, referencing the sprint plan for scope.
+
+### Step 4: Set Up Infrastructure
+
+```
+@workspace #file:.github/prompts/agent-devops.prompt.md
+
+Set up Docker and CI/CD for this project.
+Reference: docs/HLD.md (deployment section and tech stack)
+```
+
+---
+
+## Starting a Brand-New Project
 
 Open GitHub Copilot Chat and use the Orchestrator Agent:
 
@@ -35,11 +78,11 @@ Open GitHub Copilot Chat and use the Orchestrator Agent:
 Start a new project: [describe your project in 2-3 sentences]
 ```
 
-The Orchestrator will guide you through all phases, asking for your approval at each step.
+The Orchestrator will guide you through all phases, presenting technology options at each decision point and asking for your approval before proceeding.
 
 ---
 
-### Running Individual Agents
+## Running Individual Agents
 
 You can invoke any agent directly for specific tasks:
 
@@ -51,59 +94,31 @@ Gather requirements for: [project description]
 # Architecture phase
 @workspace #file:.github/prompts/agent-architect.prompt.md
 Design architecture for: [project name]
-Reference the user stories in docs/user-stories/06-user-stories.md
+Reference the user stories in docs/user-stories/user-stories.md
 
 # Detailed design phase
 @workspace #file:.github/prompts/agent-system-designer.prompt.md
 Create LLD for: [project name]
-Reference docs/HLD.md for architecture context
+Reference docs/HLD.md for architecture and tech stack context
 
 # Sprint planning
 @workspace #file:.github/prompts/agent-sprint-planner.prompt.md
 Create sprint plan for: [project name]
-Team: 1 backend, 1 frontend, 1 QA
+Team: [1 backend, 1 frontend, 1 QA — or your actual team]
 
 # Development
 @workspace #file:.github/prompts/agent-developer.prompt.md
-Implement Sprint 1
+Implement Sprint [N]
+Reference: docs/HLD.md, docs/LLD.md, docs/sprint-plan/sprint-plan.md
 
 # Testing
 @workspace #file:.github/prompts/agent-tester.prompt.md
-Write Gherkin scenarios for all stories in docs/user-stories/06-user-stories.md
+Write Gherkin scenarios for all stories in docs/user-stories/user-stories.md
 
 # DevOps
 @workspace #file:.github/prompts/agent-devops.prompt.md
 Set up Docker and CI/CD for this project
-```
-
----
-
-## Re-developing the Insurance Claim System
-
-To rebuild this project from scratch using the agents:
-
-### Step 1: Verify Documents Are Up-to-Date
-```
-@workspace #file:.github/prompts/agent-orchestrator.prompt.md
-Show project status for: Insurance Claim Submission System
-```
-
-### Step 2: Start Developer Agent from Sprint 1
-```
-@workspace #file:.github/prompts/agent-developer.prompt.md
-Re-develop from scratch, starting from Sprint 1.
-Reference:
-- docs/HLD.md
-- docs/LLD.md
-- docs/sprint-plan/09-sprint-plan.md
-- docs/user-stories/06-user-stories.md
-- docs/api/05-openapi.yaml
-```
-
-### Step 3: Validate with Tester Agent
-```
-@workspace #file:.github/prompts/agent-tester.prompt.md
-Validate Sprint 1 implementation against user stories in docs/user-stories/06-user-stories.md
+Reference: docs/HLD.md for tech stack and service layout
 ```
 
 ---
@@ -188,6 +203,7 @@ Phase 6 → Phase 7: "Tests passing. Ready to set up deployment?"
 3. **Approve before advancing** — never skip an approval gate; it ensures quality.
 4. **Use agents for changes too** — don't manually edit docs; let the agents version them properly.
 5. **Agents are interactive** — they will ask you questions. Answer them to get the best output.
+6. **Tech stack is your choice** — the Architect Agent will present options. You decide; agents adapt.
 
 ---
 
@@ -199,3 +215,4 @@ Phase 6 → Phase 7: "Tests passing. Ready to set up deployment?"
 | Agent skipped requirements | Re-invoke with explicit reference to the prerequisite documents |
 | Documents are out of sync | Use the Orchestrator to identify which phase caused the divergence |
 | Need to undo a change | Revert the document to a previous version using Git, then re-invoke the agent |
+| Agent uses wrong tech stack | Ensure `docs/HLD.md` Technology Stack section is complete and approved before invoking Developer/Tester/DevOps agents |

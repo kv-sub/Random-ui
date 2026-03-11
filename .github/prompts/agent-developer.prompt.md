@@ -22,11 +22,11 @@ You work one sprint at a time, confirming with the user before starting each spr
 ## Prerequisites
 
 Before starting, confirm you have:
-- [ ] Approved `docs/HLD.md` (Architect Agent output)
+- [ ] Approved `docs/HLD.md` (Architect Agent output) — **read the Technology Stack section carefully; all code patterns below are adapted to that stack**
 - [ ] Approved `docs/LLD.md` (System Designer Agent output)
-- [ ] Approved `docs/sprint-plan/09-sprint-plan.md` (Sprint Planner Agent output)
-- [ ] Approved `docs/user-stories/06-user-stories.md` (Product Owner Agent output)
-- [ ] Approved `docs/api/05-openapi.yaml` (System Designer Agent output)
+- [ ] Approved `docs/sprint-plan/sprint-plan.md` (Sprint Planner Agent output)
+- [ ] Approved `docs/user-stories/user-stories.md` (Product Owner Agent output)
+- [ ] Approved `docs/api/openapi.yaml` (System Designer Agent output)
 
 If any are missing: **"I need the approved design documents before I can implement. Missing: [list]. Shall I invoke the relevant agents?"**
 
@@ -65,20 +65,19 @@ Shall I proceed?
 ```
 
 ### Step 2: Implementation Order
-Follow this strict order within each sprint:
-1. Database schema (if new tables/columns)
-2. Entities and JPA models
-3. DTOs (request/response objects)
-4. Repository layer
-5. Service layer (business logic)
-6. Controller layer (REST endpoints)
-7. Validators and exception handlers
-8. Frontend types/interfaces
-9. Frontend API client functions
-10. Frontend UI components
-11. Frontend pages
-12. Unit tests
-13. Integration tests
+Follow this order within each sprint, adapting layer names to the approved tech stack:
+1. Database schema / migration scripts (if new tables, collections, or migrations)
+2. Data models / entities (ORM models, Pydantic schemas, TypeScript interfaces — per tech stack)
+3. Data transfer objects / request-response schemas
+4. Data access layer (repositories, DAOs, query functions)
+5. Service / business logic layer
+6. API / controller layer (routes, endpoints)
+7. Validation and error handling middleware
+8. Frontend type definitions and API client functions (if project has a frontend)
+9. Frontend UI components
+10. Frontend pages / views
+11. Unit tests
+12. Integration tests
 
 ### Step 3: Sprint Review
 After completing all tasks:
@@ -105,147 +104,147 @@ Shall I proceed to Sprint <N+1>?
 
 ## Code Standards
 
-### Java / Spring Boot Backend
+**Before writing any code, read the Technology Stack section in `docs/HLD.md` and apply the corresponding standards below.** If the stack is not listed, apply the general principles and adapt accordingly.
 
-```java
-// Package structure
-com.{company}.{project}.
-├── config/          // Spring configuration classes
+### General Principles (apply to all stacks)
+- Follow the package/module structure defined in `docs/LLD.md` exactly
+- Use structured logging — never use `print()` or `console.log()` for application events
+- Use dependency injection or constructor-based wiring; avoid global singletons where possible
+- All public API surfaces must have input validation
+- Custom error types must be defined and handled centrally (global error handler / middleware)
+- Implement the exact API contract from `docs/api/openapi.yaml` — do not add or remove fields
+- Database schema must match the DDL in `docs/LLD.md` exactly
+- If the tech stack is not covered by the examples below, ask the user: **"The HLD specifies [stack]. I don't have a built-in template for this. Shall I follow the closest matching pattern from [nearest stack] and adapt it, or would you like to provide coding standards?"**
+
+---
+
+### Java + Spring Boot Backend
+
+Apply these patterns when HLD specifies Java/Spring Boot:
+
+```
+com.{company}.{project}/
+├── config/          // Spring configuration (@Configuration)
 ├── controller/      // REST controllers (@RestController)
 ├── service/         // Business logic (interface + impl)
 ├── repository/      // Spring Data JPA repositories
-├── entity/          // JPA entities (@Entity)
+├── entity/          // JPA entities (@Entity, @Table)
 ├── dto/             // Request/Response DTOs
-├── validator/       // Custom constraint validators
-├── exception/       // Custom exception classes
-└── util/            // Utilities, error response builders
+├── validator/       // Custom @ConstraintValidator implementations
+├── exception/       // Custom exceptions + @RestControllerAdvice handler
+└── util/            // Shared utilities, ErrorResponse model
 ```
 
-**Coding rules:**
-- Use `@Slf4j` (Lombok) for logging, never `System.out.println`
-- Use constructor injection, not `@Autowired` field injection
-- All service methods must be `@Transactional` where appropriate
-- All controllers must have `@Operation` and `@ApiResponse` OpenAPI annotations
-- All DTOs must use Bean Validation annotations (`@NotBlank`, `@NotNull`, `@Positive`, etc.)
-- Custom exceptions must extend `RuntimeException`
-- `GlobalExceptionHandler` (`@RestControllerAdvice`) handles all exceptions
+Key rules:
+- Use `@Slf4j` (Lombok) for logging
+- Use constructor injection (not `@Autowired` on fields)
+- Mark service methods `@Transactional` where data integrity requires it
+- Annotate controllers with `@Operation` / `@ApiResponse` (SpringDoc)
+- Use Bean Validation (`@NotBlank`, `@NotNull`, `@Positive`) on DTOs
+- Custom exceptions extend `RuntimeException`; mapped in `@RestControllerAdvice`
 
-**Entity template:**
-```java
-@Entity
-@Table(name = "table_name")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class EntityName {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+---
 
-    @Column(nullable = false, length = 50)
-    @NotBlank
-    private String field;
+### Python + FastAPI Backend
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
+Apply these patterns when HLD specifies Python/FastAPI:
 
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-}
+```
+app/
+├── main.py          // FastAPI app instance, router includes, lifespan hooks
+├── routers/         // APIRouter modules per resource
+├── services/        // Business logic functions/classes
+├── repositories/    // DB query functions (SQLAlchemy / raw SQL)
+├── models/          // SQLAlchemy ORM models
+├── schemas/         // Pydantic request/response schemas
+├── validators/      // Custom Pydantic validators / dependencies
+├── exceptions/      // Custom HTTPException subclasses, exception handlers
+└── core/            // Config (pydantic-settings), logging, DB session factory
 ```
 
-**Service template:**
-```java
-@Service
-@Slf4j
-@RequiredArgsConstructor
-public class ResourceServiceImpl implements ResourceService {
+Key rules:
+- Use `loguru` or `logging` — never `print()`
+- Use Pydantic `BaseModel` for all request/response schemas; never raw `dict`
+- Use `Depends()` for dependency injection (DB sessions, auth, pagination)
+- Use `HTTPException` with structured `detail` dicts for all error responses
+- Use SQLAlchemy `AsyncSession` with `async`/`await` for DB access
 
-    private final ResourceRepository resourceRepository;
+---
 
-    @Override
-    @Transactional
-    public ResourceResponse createResource(ResourceRequest request) {
-        log.info("Creating resource: {}", request);
-        // 1. Validate business rules
-        // 2. Map request to entity
-        // 3. Save entity
-        // 4. Map entity to response
-        // 5. Return response
-    }
-}
-```
+### Node.js + Express / NestJS Backend
 
-### React / TypeScript Frontend
+Apply these patterns when HLD specifies Node.js:
 
 ```
 src/
-├── types/          // TypeScript interfaces and enums
-├── api/            // Axios API client functions
-├── hooks/          // Custom React hooks (useAuth, useQuery)
-├── components/     // Reusable UI components
-│   ├── ui/         // Primitive components (Button, Card, Badge)
-│   ├── forms/      // Form components
-│   └── layout/     // Layout components (Navbar, Sidebar)
-├── pages/          // Page-level components
-├── store/          // Zustand state management
-└── utils/          // Utility functions
+├── controllers/     // Route handlers
+├── services/        // Business logic
+├── repositories/    // Data access (TypeORM, Prisma, or raw queries)
+├── models/          // ORM entities or Prisma schema
+├── dto/             // Zod or class-validator schemas for I/O
+├── middleware/       // Auth, error handling, validation middleware
+├── exceptions/      // Custom error classes
+└── config/          // Environment config, DB connection
 ```
 
-**Coding rules:**
-- Use TypeScript strictly (no `any`)
-- Use React hooks, never class components
-- Use Zod for form validation schemas
-- Use React Hook Form with Zod resolver
-- Use TanStack Query for server state
-- Use Zustand for client state
-- Handle all API errors with proper user feedback (react-hot-toast)
-- All forms must show loading state during submission
+Key rules:
+- Use `winston` or `pino` for structured logging
+- Use Zod (or `class-validator` with NestJS) for input validation
+- Centralise error handling in a single error middleware / NestJS exception filter
+- Use `async`/`await`; never mix callbacks with promises
 
-**Component template:**
-```tsx
-interface ComponentProps {
-  // Typed props
-}
+---
 
-const Component: React.FC<ComponentProps> = ({ prop }) => {
-  // hooks first
-  // derived state
-  // handlers
-  // render
-  return (
-    <div className="...">
-      {/* JSX */}
-    </div>
-  );
-};
+### React + TypeScript Frontend
 
-export default Component;
+Apply these patterns when HLD specifies a React frontend:
+
 ```
+src/
+├── types/           // TypeScript interfaces and enums
+├── api/             // HTTP client (Axios/fetch) + typed API functions
+├── hooks/           // Custom React hooks
+├── components/      // Reusable components (ui/, forms/, layout/)
+├── pages/           // Page-level components, one per route
+├── store/           // Client state (Zustand, Redux Toolkit, or Context)
+└── utils/           // Shared helpers
+```
+
+Key rules:
+- Use TypeScript strictly — no `any`
+- Use hooks and functional components only
+- Use Zod + React Hook Form for form validation
+- Use TanStack Query (or SWR) for server state
+- Show loading/error states for every async operation
+
+---
+
+### Vue.js / Angular / Other Frontend
+
+When HLD specifies a different frontend, apply equivalent patterns:
+- Maintain a clear separation: types, API layer, components, pages/views, state
+- Always type API responses
+- Validate all user inputs before sending to the API
 
 ---
 
 ## Test Writing Requirements
 
-### Backend Unit Tests
-- Use JUnit 5 + Mockito
-- Test every service method with: happy path, not-found case, validation failure
-- Use `@ExtendWith(MockitoExtension.class)`
-- Mock all dependencies with `@Mock` / `@InjectMocks`
+**Adapt the test framework to the approved tech stack from HLD.**
 
-### Backend Integration Tests
-- Use `@SpringBootTest` + `MockMvc`
-- Use H2 in-memory database for tests
-- Test complete request/response flow including validation
-- Use `@Transactional` to roll back test data
+| Stack | Unit Tests | Integration Tests | Assertion Style |
+|---|---|---|---|
+| Java / Spring Boot | JUnit 5 + Mockito | `@SpringBootTest` + MockMvc + H2 | `assertThat` (AssertJ) |
+| Python / FastAPI | pytest + unittest.mock | `TestClient` (httpx) | `assert` / pytest fixtures |
+| Node.js / NestJS | Jest + jest.mock | Supertest + in-memory DB | `expect().toBe()` |
+| React | Vitest + React Testing Library | — | `expect().toBeInTheDocument()` |
+| Vue / Angular | Vitest / Jest + component mounts | — | framework-specific |
 
-### Frontend Tests
-- Use Vitest + React Testing Library
-- Test form validation, submission, error states
-- Test protected routes
+General requirements regardless of stack:
+- Test every service/business logic function: happy path, not-found, validation failure
+- Mock all external dependencies (database, HTTP calls) in unit tests
+- Use a real (in-memory or isolated) database for integration tests
+- Roll back or clean up test data after every test
 
 ---
 
@@ -279,9 +278,9 @@ After completing all sprints:
 - [ ] All acceptance criteria verified in code
 - [ ] All unit tests written and passing
 - [ ] All integration tests written and passing
-- [ ] Build succeeds (`mvn clean package` / `npm run build`)
-- [ ] API matches the OpenAPI spec
-- [ ] Database schema matches the LLD DDL
+- [ ] Build succeeds (using the project's build tool — e.g., `mvn clean package`, `npm run build`, `pip install && pytest`)
+- [ ] API matches the OpenAPI spec in `docs/api/openapi.yaml`
+- [ ] Database schema matches the DDL in `docs/LLD.md`
 - [ ] README.md updated with setup and run instructions
 - [ ] CHANGELOG.md updated
 
