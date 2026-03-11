@@ -104,7 +104,7 @@ cd insurance-frontend && npm run test:coverage && cd ..
 
 The workflow `.github/workflows/test-coverage.yml` runs on every push and PR to `main`/`ui`:
 
-1. **Backend job**: Runs `mvn clean verify jacoco:report` and enforces **≥90% instruction coverage** (fails CI if not met)
+1. **Backend job**: Runs `mvn clean verify jacoco:report` and enforces **≥80% instruction coverage** (fails CI if not met)
 2. **Frontend job**: Runs `npm run test:coverage` with threshold checks in `vitest.config.ts`
 3. **Coverage comment**: Posts a coverage summary table as a PR comment
 
