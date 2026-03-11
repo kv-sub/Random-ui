@@ -1,411 +1,252 @@
 # Architecture Diagrams
-## Insurance Claim Submission System
-
-**Version:** 1.2  
-**Date:** May 2026
+## Mini Digital Insurance Claim System
 
 ---
 
-## Document History
-
-| Version | Date       | Changes                                                                          |
-|---------|------------|----------------------------------------------------------------------------------|
-| 1.0     | 2026-01-05 | Initial system context and container diagrams (Sprint 1)                         |
-| 1.1     | 2026-02-09 | Updated component diagram — added claim submission and validation components (Sprint 3) |
-| 1.2     | 2026-05-11 | Added synthetic-agent container to container and deployment diagrams (Sprint 10)         |
+| Field | Value |
+|---|---|
+| **Project** | Mini Digital Insurance Claim System |
+| **Document Type** | Architecture Diagrams |
+| **Version** | v1.0 |
+| **Date** | 2026-03-11 |
+| **Author** | Architect Agent |
 
 ---
 
 ## 1. System Context Diagram
 
+Shows the system in relation to its human actors and external systems.
+
 ```mermaid
-graph TB
-    subgraph Actors["Actors"]
-        C["👤 Customer\nPolicyholder"]
-        A["👤 Admin / Reviewer\nInsurance Employee"]
-    end
+C4Context
+    title System Context — Mini Digital Insurance Claim System
 
-    subgraph System["Insurance Claim System"]
-        SPA["React SPA\n(Browser)"]
-        API["Spring Boot REST API\n(Port 8080)"]
-        DB[("PostgreSQL 16\n(Port 5432)")]
-    end
+    Person(customer, "Customer", "An insurance policy holder who submits and monitors claims via the web portal")
+    Person(officer, "Claims Officer / Admin", "Internal staff member who reviews, approves, or rejects submitted claims")
 
-    subgraph External["External Systems"]
-        PM["Policy Management System\n(Upstream — seeds policy data)"]
-    end
+    System_Boundary(system, "Mini Digital Insurance Claim System") {
+        System(portal, "Insurance Claims Portal", "Provides claim submission, tracking, and review functionality")
+    }
 
-    C -->|"Uses browser"| SPA
-    A -->|"Uses browser"| SPA
-    SPA -->|"HTTP REST /api/v1/*"| API
-    API -->|"JDBC / JPA"| DB
-    PM -->|"Seeds policies + coverages"| DB
+    Rel(customer, portal, "Submits claims, views history & status", "HTTPS / Browser")
+    Rel(officer, portal, "Reviews claims, approves/rejects", "HTTPS / Browser")
 
-    style System fill:#dbeafe,stroke:#3b82f6
-    style Actors fill:#f0fdf4,stroke:#22c55e
-    style External fill:#fef9c3,stroke:#ca8a04
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
 ```
+
+### Key Points
+- **Customer** interacts exclusively through the React SPA
+- **Claims Officer** uses the same SPA but navigates to officer-specific routes (e.g. `/officer/claims`)
+- No external system integrations exist in the hackathon scope — policy seed data is loaded internally at startup
+- The portal boundary encompasses both the frontend SPA and backend API as a single logical system
 
 ---
 
 ## 2. Container Diagram
 
+Shows the major deployable units (containers) and how they communicate.
+
 ```mermaid
-graph TB
-    subgraph Browser["User's Browser"]
-        SPA["React SPA\nReact 19 + TypeScript + Vite\n────────────────────────\nCustomer: Submit & Track Claims\nAdmin: Policy Search & Claim Review\nAuth: Role-based (CUSTOMER/ADMIN)\nState: TanStack Query + Zustand"]
-    end
+C4Container
+    title Container Diagram — Mini Digital Insurance Claim System
 
-    subgraph DockerHost["Docker Host"]
-        subgraph AppContainer["app container"]
-            API["Spring Boot REST API\nJava 21 + Spring Boot 3\n────────────────────────\nPOST /api/v1/claims\nGET  /api/v1/claims/{id}\nPATCH /api/v1/claims/{id}/review\nGET  /api/v1/claims/{id}/history\nGET  /api/v1/claims/policy/{id}\nGET  /api/v1/policies/{number}"]
-            SWAGGER["Swagger UI\n/swagger-ui.html\n(SpringDoc OpenAPI 3.0)"]
-        end
-        subgraph DBContainer["db container"]
-            PG[("PostgreSQL 16\nPort: 5432\n——————————\npolicies\npolicy_coverages\nclaims\nclaim_history\nsynthetic.* (agent)")]
-        end
-        subgraph AgentContainer["synthetic-agent container (test profile only)"]
-            SA["Streamlit Python App\nPort: 8501\n————————————————————————\nStep 1: Schema Discovery\nStep 2: LLM Spec Generation\nStep 3: Faker Row Generation\nStep 4: PostgreSQL Bulk Load"]
-        end
-    end
+    Person(customer, "Customer")
+    Person(officer, "Claims Officer")
 
-    Browser -->|"HTTP REST\nJSON /api/v1/*"| API
-    Browser -->|"View API docs"| SWAGGER
-    Browser -->|"Synthetic data UI (test only)"| SA
-    API -->|"JDBC / Hibernate ORM"| PG
-    SA -->|"psycopg2 JDBC :5432"| PG
+    Container_Boundary(fe, "Frontend Container  [Docker: nginx:alpine]") {
+        Container(spa, "React SPA", "React 18 · TypeScript · Vite", "Renders claim submission form, claim history, officer review queue. Built to static assets served by Nginx.")
+    }
 
-    style Browser fill:#dbeafe,stroke:#3b82f6
-    style DockerHost fill:#f0fdf4,stroke:#22c55e
-    style AppContainer fill:#dcfce7,stroke:#16a34a
-    style DBContainer fill:#fef9c3,stroke:#ca8a04
-    style AgentContainer fill:#fce7f3,stroke:#ec4899
+    Container_Boundary(be, "Backend Container  [Docker: eclipse-temurin:17-jre]") {
+        Container(api, "Claims REST API", "Java 17 · Spring Boot 3.x", "Handles all business logic: claim submission, validation, review workflow, audit recording")
+        Container(swagger, "Swagger UI / OpenAPI", "springdoc-openapi 2.x", "Auto-generated interactive API docs served at /swagger-ui.html")
+    }
+
+    Container_Boundary(data, "Data Layer") {
+        ContainerDb(postgres, "PostgreSQL 15", "Relational DB [Docker: postgres:15-alpine]", "Production: stores policies, claims, audit trail. Port 5432.")
+        ContainerDb(h2, "H2 In-Memory DB", "Embedded JVM [Dev/Test only]", "Zero-setup DB for local development and CI test runs. No container required.")
+    }
+
+    Rel(customer, spa, "Uses", "HTTPS :3000")
+    Rel(officer, spa, "Uses", "HTTPS :3000")
+    Rel(spa, api, "REST JSON", "HTTP :8080")
+    Rel(api, swagger, "Serves docs from", "Internal")
+    Rel(api, postgres, "Read / Write [prod profile]", "JDBC :5432")
+    Rel(api, h2, "Read / Write [dev/test profile]", "In-process JDBC")
+```
+
+### Container Responsibilities
+
+| Container | Technology | Port | Primary Responsibility |
+|---|---|---|---|
+| React SPA | React 18 + TypeScript + Vite → Nginx | 3000 | User interface for all actors |
+| Claims REST API | Spring Boot 3.x JAR | 8080 | All business logic and data access |
+| Swagger UI | springdoc-openapi (embedded) | 8080 | API documentation and manual testing |
+| PostgreSQL | postgres:15-alpine | 5432 | Durable production data store |
+| H2 | In-process (dev/test) | In-JVM | Fast test-time database |
+
+---
+
+## 3. Component Diagram
+
+Shows the internal layered structure of the Spring Boot backend application.
+
+```mermaid
+C4Component
+    title Component Diagram — Spring Boot API Internal Architecture
+
+    Container_Boundary(api_boundary, "Claims REST API  [Spring Boot 3.x]") {
+
+        Component(claim_ctrl, "ClaimController", "Spring @RestController", "POST /api/claims — submit claim\nGET /api/claims — list customer claims\nGET /api/claims/{id} — claim detail\nGET /api/claims/{id}/status — status check")
+
+        Component(officer_ctrl, "OfficerController", "Spring @RestController", "GET /api/officer/claims — pending queue\nGET /api/officer/claims/{id} — detail view\nPUT /api/officer/claims/{id}/review — approve/reject")
+
+        Component(policy_ctrl, "PolicyController", "Spring @RestController", "GET /api/policies — list policies (seeded data)\nGET /api/policies/{number} — lookup by number")
+
+        Component(claim_svc, "ClaimService", "Spring @Service", "Orchestrates claim submission flow:\n• Policy existence check\n• Claim type validation\n• Coverage limit check\n• Duplicate detection\n• Claim persistence + audit creation")
+
+        Component(review_svc, "ReviewService", "Spring @Service", "Orchestrates claim review flow:\n• Status transition validation\n• UNDER_REVIEW on detail view\n• APPROVED / REJECTED on decision\n• Audit event recording")
+
+        Component(policy_svc, "PolicyService", "Spring @Service", "Policy lookup and validation logic\nWraps PolicyRepository queries")
+
+        Component(audit_svc, "AuditService", "Spring @Service", "Creates ClaimAudit records on every status change.\nNever modifies existing audit rows.")
+
+        Component(claim_repo, "ClaimRepository", "Spring Data JPA", "JPA queries for Claim entity:\nfindByPolicyId, findByStatus,\nfindByPolicyIdAndClaimTypeAndStatusNot")
+
+        Component(policy_repo, "PolicyRepository", "Spring Data JPA", "JPA queries for Policy entity:\nfindByPolicyNumber, findByStatus")
+
+        Component(audit_repo, "AuditRepository", "Spring Data JPA", "JPA queries for ClaimAudit entity:\nfindByClaimIdOrderByTimestampAsc")
+
+        Component(exc_handler, "GlobalExceptionHandler", "Spring @ControllerAdvice", "Catches all unhandled exceptions.\nMaps to consistent RFC-7807 Problem JSON error response.")
+
+        Component(domain, "Domain / Entities", "JPA @Entity classes", "Policy, Claim, ClaimAudit\nEnums: ClaimType, ClaimStatus, PolicyStatus")
+
+        Component(dtos, "DTOs", "Java Records / POJOs", "ClaimRequest, ClaimResponse, ReviewRequest,\nPolicyResponse, ErrorResponse, AuditEntry")
+    }
+
+    ContainerDb(db, "Database", "H2 / PostgreSQL", "")
+
+    Rel(claim_ctrl, claim_svc, "Calls")
+    Rel(officer_ctrl, review_svc, "Calls")
+    Rel(officer_ctrl, claim_svc, "Calls (read)")
+    Rel(policy_ctrl, policy_svc, "Calls")
+
+    Rel(claim_svc, policy_svc, "Uses (validate policy)")
+    Rel(claim_svc, audit_svc, "Uses (record SUBMITTED event)")
+    Rel(claim_svc, claim_repo, "Uses")
+    Rel(review_svc, claim_repo, "Uses")
+    Rel(review_svc, audit_svc, "Uses (record review events)")
+    Rel(policy_svc, policy_repo, "Uses")
+    Rel(audit_svc, audit_repo, "Uses")
+
+    Rel(claim_repo, db, "JDBC / JPA")
+    Rel(policy_repo, db, "JDBC / JPA")
+    Rel(audit_repo, db, "JDBC / JPA")
+
+    Rel(claim_ctrl, exc_handler, "Exceptions propagate to")
+    Rel(officer_ctrl, exc_handler, "Exceptions propagate to")
+
+    Rel(claim_ctrl, dtos, "Uses (request/response)")
+    Rel(officer_ctrl, dtos, "Uses (request/response)")
+    Rel(claim_svc, domain, "Uses (entities)")
+    Rel(review_svc, domain, "Uses (entities)")
+```
+
+### Layer Descriptions
+
+| Layer | Classes | Pattern |
+|---|---|---|
+| **Controller** | `ClaimController`, `OfficerController`, `PolicyController` | Spring `@RestController` — HTTP routing, request validation (`@Valid`), response mapping |
+| **Service** | `ClaimService`, `ReviewService`, `PolicyService`, `AuditService` | Spring `@Service` — business rules, orchestration, transaction boundaries (`@Transactional`) |
+| **Repository** | `ClaimRepository`, `PolicyRepository`, `AuditRepository` | Spring Data JPA `JpaRepository` — query abstraction, no SQL boilerplate |
+| **Domain** | `Policy`, `Claim`, `ClaimAudit` + enums | JPA `@Entity` — persistence mapping, column constraints |
+| **DTO** | `ClaimRequest`, `ClaimResponse`, `ReviewRequest`, `AuditEntry`, `ErrorResponse` | Java records / POJOs — API contract, decoupled from JPA layer |
+| **Cross-cutting** | `GlobalExceptionHandler` | `@ControllerAdvice` — intercepts all exceptions, returns consistent error JSON |
+
+---
+
+## 4. Deployment Diagram
+
+Shows how containers are deployed using Docker Compose on a single host.
+
+```mermaid
+C4Deployment
+    title Deployment Diagram — Docker Compose on a Single Docker Host
+
+    Deployment_Node(host, "Docker Host", "Linux / Docker Engine 24+  (developer laptop or CI runner)") {
+
+        Deployment_Node(net, "Docker Bridge Network: claims-net", "Internal container-to-container communication") {
+
+            Deployment_Node(fe_node, "frontend  [Container]", "Image: nginx:alpine — built from ./frontend/Dockerfile") {
+                Container(spa_deploy, "React SPA (static assets)", "Vite build output served by Nginx on container port 80", "Responds to browser requests. Proxies /api/* to backend container.")
+            }
+
+            Deployment_Node(be_node, "backend  [Container]", "Image: eclipse-temurin:17-jre — built from ./backend/Dockerfile") {
+                Container(api_deploy, "Spring Boot JAR", "java -jar claims-api.jar  — container port 8080", "Handles REST requests from SPA. Connects to postgres over claims-net.")
+                Container(swagger_deploy, "Swagger UI", "Served by Spring Boot at /swagger-ui.html", "Bundled within the same Spring Boot process.")
+            }
+
+            Deployment_Node(db_node, "postgres  [Container]", "Image: postgres:15-alpine") {
+                ContainerDb(pg_deploy, "PostgreSQL 15", "Listens on container port 5432", "Stores all application data. Backed by named volume pgdata.")
+            }
+        }
+
+        Deployment_Node(volumes, "Docker Named Volumes", "") {
+            Container(pgdata, "pgdata", "Docker volume", "Persists PostgreSQL data across container restarts.")
+        }
+    }
+
+    Rel(spa_deploy, api_deploy, "REST API calls", "HTTP  host:8080 → container:8080")
+    Rel(api_deploy, pg_deploy, "Database queries", "JDBC  hostname: postgres  port: 5432")
+    Rel(pg_deploy, pgdata, "Persists data to", "Volume mount: /var/lib/postgresql/data")
+```
+
+### Port Mapping Summary
+
+| Service | Host Port | Container Port | Access From |
+|---|---|---|---|
+| `frontend` | `3000` | `80` | Browser → `http://localhost:3000` |
+| `backend` | `8080` | `8080` | Browser (Swagger) → `http://localhost:8080/swagger-ui.html`; frontend SPA internally |
+| `postgres` | `5432` | `5432` | DBA tools / local debugging only; not exposed in production |
+
+### Docker Compose Quick Reference
+
+```yaml
+# Abbreviated — see docker-compose.yml for full definition
+services:
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [backend]
+    networks: [claims-net]
+
+  backend:
+    build: ./backend
+    ports: ["8080:8080"]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/claimsdb
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on: [postgres]
+    networks: [claims-net]
+
+  postgres:
+    image: postgres:15-alpine
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: claimsdb
+      POSTGRES_USER: claims_user
+      POSTGRES_PASSWORD: claims_pass
+    volumes: [pgdata:/var/lib/postgresql/data]
+    networks: [claims-net]
+
+volumes:
+  pgdata:
+
+networks:
+  claims-net:
+    driver: bridge
 ```
 
 ---
 
-## 3. Backend Component Diagram
-
-```mermaid
-graph TB
-    subgraph Controllers["Controllers (@RestController)"]
-        PC["PolicyController\nGET /api/v1/policies/{no}"]
-        CC["ClaimController\nPOST, GET, PATCH /api/v1/claims"]
-        HC["ClaimHistoryController\nGET /api/v1/claims/{id}/history"]
-    end
-
-    subgraph Services["Services (@Service)"]
-        PS["PolicyServiceImpl\ngetPolicy()"]
-        CS["ClaimServiceImpl\nsubmitClaim()\ngetClaimStatus()\nreviewClaim()\ngetClaimsByPolicy()"]
-        HS["ClaimHistoryService\ngetHistory()"]
-    end
-
-    subgraph Repos["Repositories (JPA)"]
-        PR["PolicyRepository\nfindByPolicyNumber\nfindByPolicyNumberWithCoverages"]
-        CR["ClaimRepository\nfindByPolicy_PolicyId\nfindDuplicateClaims"]
-        CVR["PolicyCoverageRepository\nfindByPolicyIdAndClaimTypeAndIsActiveTrue"]
-        HR["ClaimHistoryRepository\nfindByClaimClaimIdOrderByTimestampDesc"]
-    end
-
-    subgraph Cross["Cross-cutting"]
-        GEH["GlobalExceptionHandler\n@RestControllerAdvice"]
-        VAL["Validators\n@ValidPolicyNumber\n@ValidIncidentDate"]
-        OA["OpenApiConfig\nSwagger UI"]
-    end
-
-    DB[("PostgreSQL 16")]
-
-    PC --> PS
-    CC --> CS
-    HC --> HS
-
-    PS --> PR
-    CS --> PR
-    CS --> CR
-    CS --> CVR
-    CS --> HR
-    HS --> CR
-    HS --> HR
-
-    PR --> DB
-    CR --> DB
-    CVR --> DB
-    HR --> DB
-
-    style Controllers fill:#dbeafe,stroke:#3b82f6
-    style Services fill:#dcfce7,stroke:#16a34a
-    style Repos fill:#fef3c7,stroke:#f59e0b
-    style Cross fill:#fce7f3,stroke:#ec4899
-```
-
----
-
-## 4. Claim Submission — Sequence Diagram
-
-```mermaid
-sequenceDiagram
-    actor C as Customer
-    participant F as React Frontend
-    participant A as Spring Boot API
-    participant D as PostgreSQL
-
-    C->>F: Enter policy number (debounce 500ms)
-    F->>A: GET /api/v1/policies/{policyNumber}
-    A->>D: SELECT policy + coverages (JOIN FETCH)
-    D-->>A: Policy with coverages
-    A-->>F: PolicyResponse {coverageLimits}
-    F-->>C: Show verified policy + per-type limits
-
-    C->>F: Fill claim details + submit
-    F->>F: Zod schema validation (client-side)
-    F->>A: POST /api/v1/claims
-    Note over A: Bean Validation (@Valid)
-    A->>D: findByPolicyNumberWithCoverages
-    D-->>A: Policy + Coverages
-    Note over A: Assert ACTIVE + date range
-    A->>D: findByPolicy_PolicyIdAndClaimTypeAndIsActiveTrue
-    D-->>A: PolicyCoverage
-    Note over A: Assert amount <= limitAmount
-    A->>D: findDuplicateClaims(policyId, type, date, now-24h)
-    D-->>A: [] (no duplicates)
-    A->>D: INSERT INTO claims (status=SUBMITTED)
-    A->>D: INSERT INTO claim_history (status=SUBMITTED)
-    D-->>A: Saved Claim
-    A-->>F: 201 ClaimResponse
-    F-->>C: Success modal — "Claim Submitted!"
-```
-
----
-
-## 5. Claim Review — Sequence Diagram
-
-```mermaid
-sequenceDiagram
-    actor Ad as Admin
-    participant F as React Frontend
-    participant A as Spring Boot API
-    participant D as PostgreSQL
-
-    Ad->>F: Search policy number
-    F->>A: GET /api/v1/policies/{policyNumber}
-    A-->>F: PolicyResponse
-    F-->>Ad: Policy card + coverage grid
-
-    Ad->>F: Click "View Claims"
-    F->>A: GET /api/v1/claims/policy/{policyId}
-    A-->>F: List<ClaimResponse>
-    F-->>Ad: Claims list
-
-    Ad->>F: Click a claim
-    F->>A: GET /api/v1/claims/{claimId}
-    F->>A: GET /api/v1/claims/{claimId}/history
-    A-->>F: ClaimResponse + List<ClaimHistoryResponse>
-    F-->>Ad: Detail card + history timeline
-
-    Ad->>F: Click Approve / enter notes / confirm
-    F->>A: PATCH /api/v1/claims/{claimId}/review {action: APPROVE, reviewerNotes}
-    A->>D: SELECT claim WHERE claim_id = ?
-    D-->>A: Claim
-    A->>D: UPDATE claims SET status = APPROVED
-    A->>D: INSERT INTO claim_history (status=APPROVED, reviewer_notes)
-    D-->>A: Updated claim
-    A-->>F: 200 ClaimResponse {status: APPROVED}
-    F-->>Ad: Toast "Claim approved!"
-```
-
----
-
-## 6. Claim Status State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> SUBMITTED : Customer submits\nPOST /api/v1/claims
-
-    SUBMITTED --> IN_REVIEW : Admin sets in review\nPATCH /review
-    SUBMITTED --> APPROVED  : Admin approves directly\nPATCH /review action=APPROVE
-    SUBMITTED --> REJECTED  : Admin rejects\nPATCH /review action=REJECT
-
-    IN_REVIEW --> APPROVED  : Admin approves\nPATCH /review action=APPROVE
-    IN_REVIEW --> REJECTED  : Admin rejects\nPATCH /review action=REJECT
-
-    APPROVED --> [*] : Terminal state
-    REJECTED --> [*] : Terminal state
-
-    note right of SUBMITTED
-        Initial state.
-        ClaimHistory record created.
-    end note
-    note right of APPROVED
-        Terminal state.
-        ClaimHistory appended
-        with reviewer_notes.
-    end note
-```
-
----
-
-## 7. Frontend Component Tree
-
-```mermaid
-graph TD
-    App["App\nQueryClientProvider + BrowserRouter"]
-
-    App --> Navbar["Navbar\nRole-aware navigation"]
-    App --> LoginPage["LoginPage /login\nRole selector"]
-    App --> Home["Home /\nRole-aware dashboard"]
-    App --> SubmitClaimPage["SubmitClaimPage\n/submit-claim\nCUSTOMER only"]
-    App --> TrackClaimPage["TrackClaimPage\n/track-claim\nCUSTOMER only"]
-    App --> AdminRoutes["AdminRoutes\n/admin/*\nADMIN only"]
-
-    SubmitClaimPage --> ClaimSubmissionForm["ClaimSubmissionForm\nreact-hook-form + zod"]
-    ClaimSubmissionForm --> PolicyVerify["Policy Verification\ndebounced GET /policies"]
-    ClaimSubmissionForm --> CoverageDropdown["ClaimType Dropdown\ndynamic from coverageLimits"]
-    ClaimSubmissionForm --> FormModal["Success / Error Modal"]
-
-    TrackClaimPage --> ClaimCard["Claim Detail Card"]
-    TrackClaimPage --> StatusBadge["Badge (status color)"]
-    TrackClaimPage --> HistTimeline1["History Timeline"]
-
-    AdminRoutes --> AdminPoliciesPage["AdminPoliciesPage\n/admin/policies\nPolicy search + coverage grid"]
-    AdminRoutes --> ClaimListPage["ClaimListPage\n/admin/claims/:policyId\nClaims per policy"]
-    AdminRoutes --> ClaimDetailPage["ClaimDetailPage\n/admin/claims/:policyId/:claimId"]
-
-    ClaimDetailPage --> DetailCard["Claim Details Card"]
-    ClaimDetailPage --> HistTimeline2["History Timeline"]
-    ClaimDetailPage --> ReviewModal["Review Modal\nApprove / Reject + notes"]
-
-    style LoginPage fill:#fce7f3,stroke:#ec4899
-    style SubmitClaimPage fill:#dbeafe,stroke:#3b82f6
-    style TrackClaimPage fill:#dbeafe,stroke:#3b82f6
-    style AdminRoutes fill:#fef3c7,stroke:#f59e0b
-    style AdminPoliciesPage fill:#fef3c7,stroke:#f59e0b
-    style ClaimListPage fill:#fef3c7,stroke:#f59e0b
-    style ClaimDetailPage fill:#fef3c7,stroke:#f59e0b
-```
-
----
-
-## 8. Data Flow Diagram
-
-```mermaid
-flowchart LR
-    subgraph Client["Browser (React SPA)"]
-        FORM["Claim\nSubmission\nForm"]
-        TRACK["Track\nClaim\nPage"]
-        ADMIN["Admin\nReview\nPortal"]
-    end
-
-    subgraph API["Spring Boot API"]
-        PC["PolicyController"]
-        CC["ClaimController"]
-        HC["ClaimHistoryController"]
-        PS["PolicyService"]
-        CS["ClaimService"]
-        HS["ClaimHistoryService"]
-    end
-
-    subgraph DB["PostgreSQL"]
-        POL[("policies")]
-        COV[("policy_coverages")]
-        CLM[("claims")]
-        HIS[("claim_history")]
-    end
-
-    FORM -->|"GET /policies/{no}"| PC
-    FORM -->|"POST /claims"| CC
-    TRACK -->|"GET /claims/{id}"| CC
-    TRACK -->|"GET /claims/{id}/history"| HC
-    ADMIN -->|"GET /policies/{no}"| PC
-    ADMIN -->|"GET /claims/policy/{id}"| CC
-    ADMIN -->|"PATCH /claims/{id}/review"| CC
-    ADMIN -->|"GET /claims/{id}/history"| HC
-
-    PC --> PS
-    CC --> CS
-    HC --> HS
-
-    PS --> POL
-    PS --> COV
-    CS --> POL
-    CS --> COV
-    CS --> CLM
-    CS --> HIS
-    HS --> CLM
-    HS --> HIS
-```
-
----
-
-## 9. Deployment Architecture
-
-```mermaid
-graph TB
-    subgraph Internet["Internet / Intranet"]
-        USER["End Users\n(Browser)"]
-        DEV["Developer / QA\n(Browser)"]
-    end
-
-    subgraph ProdStack["Docker Compose — prod profile"]
-        subgraph ProdNet["docker network"]
-            APP_P["app service\nSpring Boot JAR\nPort 8080:8080\nSPRING_PROFILES_ACTIVE=prod"]
-            DB_P["db service\nPostgreSQL 16\nPort 5432:5432\nVolume: pgdata"]
-        end
-    end
-
-    subgraph TestStack["Docker Compose — test profile (--profile test)"]
-        subgraph TestNet["docker network"]
-            APP_T["app service\nSpring Boot JAR\nPort 8080:8080"]
-            DB_T["db service\nPostgreSQL 16\nPort 5432:5432"]
-            SA["synthetic-agent service\nStreamlit Python\nPort 8501:8501"]
-        end
-    end
-
-    USER -->|"HTTP :8080"| APP_P
-    APP_P -->|"JDBC :5432"| DB_P
-
-    DEV -->|"HTTP :8080"| APP_T
-    DEV -->|"HTTP :8501"| SA
-    APP_T -->|"JDBC :5432"| DB_T
-    SA -->|"psycopg2 :5432"| DB_T
-
-    style Internet fill:#f1f5f9,stroke:#94a3b8
-    style ProdStack fill:#f0fdf4,stroke:#22c55e
-    style ProdNet fill:#dcfce7,stroke:#16a34a
-    style TestStack fill:#fce7f3,stroke:#ec4899
-    style TestNet fill:#fdf2f8,stroke:#ec4899
-```
-
----
-
-## 10. Synthetic Agent — Data Flow
-
-```mermaid
-graph LR
-    DEV["Developer\nBrowser :8501"]
-
-    subgraph Agent["synthetic-agent (Streamlit)"]
-        S1["Step 1\nDiscover Schema\n(information_schema)"]
-        S2["Step 2\nLLM Spec\n(gpt-4.1 / fallback)"]
-        S3["Step 3\nGenerate Rows\n(Faker + strategies)"]
-        S4["Step 4\nLoad to DB\n(execute_values)"]
-    end
-
-    subgraph PG["PostgreSQL (db service)"]
-        PUB[("public schema\n(source tables)")]
-        SYN[("synthetic schema\n(generated tables)")]
-    end
-
-    LLM["LLM Endpoint\n(AICafe / gpt-4.1)"]
-
-    DEV -->|"click Discover"| S1
-    S1 -->|"reads schema"| PUB
-    S1 -->|"schema JSON"| S2
-    S2 -->|"POST chat/completions"| LLM
-    LLM -->|"GenSpec JSON"| S2
-    S2 -->|"validated spec"| S3
-    S3 -->|"rows dict"| S4
-    S4 -->|"CREATE + INSERT"| SYN
-
-    style Agent fill:#fce7f3,stroke:#ec4899
-    style PG fill:#fef9c3,stroke:#ca8a04
-```
+*End of Architecture Diagrams — Mini Digital Insurance Claim System v1.0*
