@@ -4,6 +4,25 @@ A full-stack insurance claim management platform with a Spring Boot REST API, Re
 
 ---
 
+## 🤖 Agile SDLC Agent System
+
+This project includes a set of **role-based custom agents** that model the full agile SDLC. Each agent is defined as a `.prompt.md` file in `.github/prompts/` and can be invoked in GitHub Copilot Chat.
+
+| Agent | File | Role |
+|---|---|---|
+| 🎯 Orchestrator | `agent-orchestrator.prompt.md` | Coordinates all agents and phase gates |
+| 📋 Product Owner | `agent-product-owner.prompt.md` | Requirements, user stories, acceptance criteria |
+| 🏛️ Architect | `agent-architect.prompt.md` | HLD, architecture diagrams, technology choices |
+| 🔧 System Designer | `agent-system-designer.prompt.md` | LLD, API contracts, DB schema, sequence diagrams |
+| 📅 Sprint Planner | `agent-sprint-planner.prompt.md` | Sprint plans, task breakdowns, backlog management |
+| 💻 Developer | `agent-developer.prompt.md` | Code implementation sprint-by-sprint |
+| 🧪 Tester | `agent-tester.prompt.md` | Gherkin BDD scenarios, test plans, E2E tests |
+| 🚀 DevOps | `agent-devops.prompt.md` | Docker, CI/CD, coverage enforcement |
+
+See **[`docs/agents/README.md`](docs/agents/README.md)** for usage instructions and [`docs/agents/00-agent-interaction-model.md`](docs/agents/00-agent-interaction-model.md) for the interaction model.
+
+---
+
 ## Features
 
 - **React Frontend** — role-based UI (Customer / Admin) for submitting, tracking, and reviewing claims
